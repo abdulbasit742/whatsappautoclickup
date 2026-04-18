@@ -1,56 +1,63 @@
-# 🚀 ClientFlow AI — WhatsApp Business Automation
+# ClientFlow AI 🤖
+WhatsApp Business Automation Platform
 
-A full-stack WhatsApp CRM & automation platform for freelancers and small businesses. Handles client onboarding, AI responses, payments, follow-ups, reviews, broadcasts, and more — all from one dark dashboard.
-
----
-
-## ✨ Features
-
-- 🤖 **Multi-AI Fallback** — Claude → GPT-4o → Gemini → Groq (auto-switches on credit exhaustion)
-- 💬 **WhatsApp Automation** — Auto-reply, onboarding, pricing, payment flow via Meta Cloud API
-- 💰 **Payments** — Easypaisa / JazzCash / Bank with screenshot confirmation
-- 📊 **Analytics Dashboard** — Revenue charts, message volume, conversion funnel, AI usage
-- 📅 **Follow-Up Engine** — Cron-based: cold leads, pending payments, post-delivery, re-engagement
-- 📢 **Broadcasts** — Targeted bulk messages with AI writer + scheduling
-- ⭐ **Reviews & Sentiment** — Auto-collect ratings, sentiment analysis charts
-- 🔔 **Real-time Alerts** — Socket.io for new clients, flagged queries, payment alerts
-- 👥 **CRM** — Full client profiles, chat history, payment history, referral tracking
+> A production-ready SaaS dashboard that turns your WhatsApp Business account into a full AI-powered CRM: automated replies, payment tracking, broadcast campaigns, appointment booking, referrals, and live analytics — all in one dark-themed dashboard.
 
 ---
 
-## 📁 Project Structure
+## What It Does
 
-```
-clientflow-ai/
-├── frontend/          # React + Vite + Tailwind CSS
-│   └── src/
-│       ├── components/   Sidebar, StatCard, ChatBubble, AlertBell, DataTable, Toast
-│       └── pages/        13 dashboard pages
-├── backend/           # Node.js + Express
-│   ├── routes/           15 API route files
-│   ├── services/         aiService, whatsappService, cronService
-│   ├── middleware/        JWT auth
-│   └── db/               PostgreSQL pool
-├── database/
-│   ├── schema.sql        14 tables
-│   └── seed.sql          Sample services + default settings
-├── .env.example
-└── README.md
-```
+| Module | Description |
+|--------|-------------|
+| **Dashboard** | Real-time overview of revenue, active clients, pending payments, and message volume. Shows today's stats, conversion funnel, and unread alerts at a glance. |
+| **Inbox** | Full WhatsApp conversation view for every client, with message history, AI reply suggestion (one click), quick-template bar, and follow-up triggers. Supports sending messages directly from the dashboard. |
+| **Clients** | CRM list of all clients with status (lead → active → paid → inactive), search, and quick navigation to full profiles. Tracks total spend, first contact, last active date, and referral code. |
+| **Client Profile** | Deep per-client view showing chat history, all payments, reviews, pending follow-ups, and private notes — all in one tabbed page. Lets you confirm payments, schedule follow-ups, and send messages. |
+| **Payments** | Tracks all Easypaisa / JazzCash / bank payments with pending confirmation workflow. Screenshot uploads, one-click confirm/reject, and revenue summary cards. |
+| **Services** | Service catalog with name, category, price (PKR), delivery days, and active/inactive toggle. Used by the AI to quote prices to clients automatically when they ask. |
+| **Templates** | Library of reusable WhatsApp message templates with category color coding, usage counters, clipboard copy, and one-click send to active client. Supports `{{client_name}}` personalisation placeholders. |
+| **Broadcasts** | Send targeted bulk WhatsApp messages to segments (all clients / paid / inactive / leads) with optional scheduling. Includes an AI writer that generates broadcast copy from a topic + tone. |
+| **Appointments** | Booking system with upcoming card view and full history table. Books confirmed slots, sends WhatsApp confirmation automatically, tracks reminder status, and supports mark-complete / cancel actions. |
+| **Follow-ups** | Automated follow-up queue (cron-driven, hourly) with five types: cold lead, pending payment, post-delivery, re-engagement, upsell. Each message is editable before sending or auto-sent at schedule time. |
+| **Reviews** | Collects post-delivery star ratings and feedback automatically via WhatsApp. Displays sentiment analysis (positive / neutral / negative) as pie chart plus rating distribution bar chart. |
+| **Referrals** | Leaderboard of clients ranked by referral count with gold/silver/bronze row highlights. One-click reward message via WhatsApp with pre-filled, editable congratulations text. |
+| **Analytics** | Revenue trend line, message volume bar chart, client growth area chart, conversion funnel, AI provider usage breakdown, and per-service revenue. All powered by Recharts with dark-themed tooltips. |
+| **Alerts** | Real-time bell icon with Socket.io push for new clients, flagged queries, payment notifications, and system events. Shows unread count badge and dismissable list. |
+| **Settings** | Business profile (name, description, working hours, auto-reply on/off), payment account numbers (Easypaisa / JazzCash / bank), and AI provider API keys — stored in the database and used at runtime. |
+| **AI Engine** | Multi-provider AI fallback: Claude → GPT-4o → Gemini → Groq. Auto-switches on credit exhaustion or rate limits. Handles onboarding, pricing, payment, review collection, and upsell flows — all context-aware. |
 
 ---
 
-## ⚡ Quick Start
+## Tech Stack
 
-### Prerequisites
-- Node.js 18+
+| Layer | Technology |
+|-------|-----------|
+| **Frontend** | React 18, Vite 5, Tailwind CSS 3 (dark mode), Recharts 2, Lucide React, date-fns, Socket.io client |
+| **Backend** | Node.js 20, Express 4, Socket.io 4, node-cron, jsonwebtoken, bcrypt, multer |
+| **Database** | PostgreSQL 14+ (14 normalised tables), pg driver |
+| **AI Providers** | Anthropic Claude, OpenAI GPT-4o, Google Gemini, Groq (priority fallback chain) |
+| **WhatsApp** | Meta Cloud API (WhatsApp Business Platform) |
+| **Deployment** | Vercel (frontend), Railway (backend + PostgreSQL) |
+
+---
+
+## Prerequisites
+
+- Node.js 20+
 - PostgreSQL 14+
-- WhatsApp Business account (Meta Developer Portal)
-- At least one AI API key (Claude recommended)
+- Meta Developer Account (for WhatsApp Business API)
+- API keys for at least one AI provider (Groq is free)
+- A WhatsApp Business phone number verified in Meta Portal
 
-### 1. Install Dependencies
+---
+
+## Quick Start
+
+### 1. Clone & Install
 
 ```bash
+git clone <your-repo>
+cd clientflow-ai
 cd backend && npm install
 cd ../frontend && npm install
 ```
@@ -65,105 +72,198 @@ psql -U postgres -d clientflow -f database/seed.sql
 
 ### 3. Environment Variables
 
+Copy `.env.example` to `.env` and fill in:
+
 ```bash
 cp .env.example backend/.env
-# Edit backend/.env with your values
 ```
 
-**Required:**
+| Variable | Description | Where to get it |
+|----------|-------------|-----------------|
+| `DATABASE_URL` | Full PostgreSQL connection string | `postgresql://user:pass@localhost:5432/clientflow` |
+| `JWT_SECRET` | Secret for signing auth tokens | Any long random string (e.g. `openssl rand -hex 32`) |
+| `OWNER_EMAIL` | Dashboard login email | You choose |
+| `OWNER_PASSWORD` | Dashboard login password | You choose |
+| `WHATSAPP_TOKEN` | Meta permanent access token | Meta Developer Portal → WhatsApp → API Setup |
+| `WHATSAPP_PHONE_ID` | Your WhatsApp Business phone number ID | Meta Developer Portal → WhatsApp → API Setup |
+| `WHATSAPP_VERIFY_TOKEN` | Webhook verification string | Any custom string you choose |
+| `ANTHROPIC_API_KEY` | Claude API key | console.anthropic.com |
+| `OPENAI_API_KEY` | GPT-4o key (optional, fallback) | platform.openai.com |
+| `GEMINI_API_KEY` | Gemini Flash key (optional, fallback) | aistudio.google.com |
+| `GROQ_API_KEY` | Groq LLaMA key (optional, completely free) | console.groq.com |
+| `FRONTEND_URL` | CORS allowed origin | `http://localhost:5173` locally, Vercel URL in prod |
+| `PORT` | Backend port | `5000` (default) |
 
-| Variable | Where to get |
-|---|---|
-| `DATABASE_URL` | `postgresql://user:pass@localhost:5432/clientflow` |
-| `JWT_SECRET` | Any long random string |
-| `OWNER_EMAIL` | Your dashboard login email |
-| `OWNER_PASSWORD` | Your dashboard login password |
-| `WHATSAPP_TOKEN` | Meta Developer Portal |
-| `WHATSAPP_PHONE_ID` | Meta Developer Portal |
-| `WHATSAPP_VERIFY_TOKEN` | Any custom string (you choose) |
-| `ANTHROPIC_API_KEY` | console.anthropic.com |
-| `FRONTEND_URL` | `http://localhost:5173` |
+### 4. Get WhatsApp API (Meta)
 
-**Optional (AI fallback):**
-```
-OPENAI_API_KEY=...
-GEMINI_API_KEY=...
-GROQ_API_KEY=...
-```
+Step by step:
 
-### 4. Run Locally
+1. Go to [developers.facebook.com](https://developers.facebook.com)
+2. Create App → **Business** type → Add **WhatsApp** product
+3. Under **API Setup**, get your **Phone Number ID** and **Temporary/Permanent Access Token**
+4. Set webhook URL: `https://your-backend.railway.app/webhook`
+5. Verify token: set to whatever you put in `WHATSAPP_VERIFY_TOKEN`
+6. Subscribe to events: **messages**, **message_deliveries**, **message_reads**
+7. To make the access token permanent: Create a System User in Business Manager → assign to App → generate token with `whatsapp_business_messaging` permission
+
+### 5. Get AI Provider Keys
+
+| Provider | Dashboard URL | Free Tier | Notes |
+|----------|--------------|-----------|-------|
+| **Claude** (recommended) | console.anthropic.com | $5 credit on signup | Best quality for sales conversations |
+| **OpenAI GPT-4o** | platform.openai.com | Pay-as-you-go | Excellent all-rounder |
+| **Gemini Flash** | aistudio.google.com | 1M tokens/day free | Good free tier for testing |
+| **Groq LLaMA 3.3** | console.groq.com | Completely free | Fastest, great for high volume |
+
+You only need **one** key to get started. The system auto-falls back through the chain on errors.
+
+### 6. Run Locally
 
 ```bash
-# Terminal 1
-cd backend && npm run dev    # → http://localhost:5000
+# Terminal 1 — Backend
+cd backend && npm run dev
+# → http://localhost:5000
 
-# Terminal 2
-cd frontend && npm run dev   # → http://localhost:5173
+# Terminal 2 — Frontend
+cd frontend && npm run dev
+# → http://localhost:5173
 ```
 
-Login at `http://localhost:5173` with `OWNER_EMAIL` / `OWNER_PASSWORD`.
+Visit: [http://localhost:5173](http://localhost:5173)  
+Login with `OWNER_EMAIL` and `OWNER_PASSWORD` from your `.env`
 
----
-
-## 📱 WhatsApp Webhook Setup
-
-1. Go to [developers.facebook.com](https://developers.facebook.com) → Create App → Business
-2. Add WhatsApp product → Get **Phone Number ID** and **Access Token**
-3. Webhook URL: `https://your-domain.com/webhook`
-4. Verify token: same as `WHATSAPP_VERIFY_TOKEN` in `.env`
-5. Subscribe to: `messages`, `message_deliveries`, `message_reads`
-
-**Local testing with ngrok:**
-```bash
-ngrok http 5000
-# Use the HTTPS URL as webhook
-```
-
----
-
-## 🚀 Deployment
-
-**Frontend → Vercel:** Build with `npm run build`, deploy `/dist`
+### 7. Deploy to Production
 
 **Backend → Railway:**
-1. Push to GitHub
-2. Connect to [railway.app](https://railway.app) → Add PostgreSQL plugin
-3. Set all env vars → Deploy
+
+1. Push code to GitHub
+2. Go to [railway.app](https://railway.app) → New Project → Deploy from GitHub
+3. Select the `/backend` folder (or root if using monorepo)
+4. Add all `.env` variables in the Railway **Variables** tab
+5. Add **PostgreSQL** plugin → Railway auto-sets `DATABASE_URL`
+6. Railway auto-detects the `Dockerfile` and builds
+7. Note your Railway public URL (e.g. `https://clientflow-api.railway.app`)
+
+**Frontend → Vercel:**
+
+1. Go to [vercel.com](https://vercel.com) → New Project → Import from GitHub
+2. Select the `/frontend` folder as the root directory
+3. Set environment variable: `VITE_API_URL` = your Railway backend URL
+4. Deploy — Vercel auto-detects Vite and uses `vercel.json` for SPA routing
+
+### 8. First-Time Setup
+
+After deploying or running locally:
+
+1. Log in to the dashboard
+2. Go to **Settings** → fill in your business name and description
+3. Add your **Easypaisa** and/or **JazzCash** numbers in Settings
+4. Add your AI API key(s) in Settings → AI Configuration
+5. Go to **Services** → add your service offerings with prices
+6. In Settings, set your **working hours** and enable **Auto-Reply**
+7. Test by sending a WhatsApp message to your business number
+8. Check the **Inbox** page — the message should appear within seconds
 
 ---
 
-## 🔧 First Login Checklist
+## Architecture Overview
 
-1. ⚙️ **Settings** → Add business name, payment numbers (Easypaisa/JazzCash), AI API keys
-2. 📦 **Services** → Add your service offerings with prices
-3. ✅ Toggle **Auto-Reply** ON in Settings
-4. 🔗 Connect WhatsApp webhook
-5. 💬 Send a test WhatsApp message to your number
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        CLIENT SIDE                              │
+│                                                                 │
+│   WhatsApp User                                                 │
+│       │  sends message                                          │
+│       ▼                                                         │
+│   Meta Cloud API ──────────────────────────────────────────────┤
+│       │  POST /webhook                                          │
+└───────┼─────────────────────────────────────────────────────────┘
+        │
+┌───────▼─────────────────────────────────────────────────────────┐
+│                      BACKEND (Railway)                          │
+│                                                                 │
+│   webhook.js                                                    │
+│       │ dedup check (message_id)                                │
+│       │ save to messages table                                  │
+│       ▼                                                         │
+│   aiService.js ──► Claude / GPT-4o / Gemini / Groq             │
+│       │ (context-aware: onboarding, pricing, payment, upsell)  │
+│       ▼                                                         │
+│   whatsappService.js ──► reply via Meta API                     │
+│       │                                                         │
+│       ▼                                                         │
+│   PostgreSQL ◄──── all routes (clients, payments, reviews…)    │
+│       │                                                         │
+│   cronService.js ──► scheduled follow-ups every hour           │
+│   Socket.io ──────► real-time push to frontend                  │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │ REST API + Socket.io
+┌───────────────────────────▼─────────────────────────────────────┐
+│                    FRONTEND (Vercel)                            │
+│                                                                 │
+│   React Dashboard                                               │
+│   ├── Inbox          (live conversations)                       │
+│   ├── Clients        (CRM + profiles)                           │
+│   ├── Payments       (confirm / reject)                         │
+│   ├── Broadcasts     (bulk messages)                            │
+│   ├── Appointments   (booking calendar)                         │
+│   ├── Reviews        (sentiment charts)                         │
+│   ├── Referrals      (leaderboard)                              │
+│   ├── Analytics      (revenue + AI usage)                       │
+│   └── Settings       (API keys, business config)                │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## 🤖 AI Providers
+## Troubleshooting
 
-| Provider | Key From | Fallback Priority |
-|---|---|---|
-| Claude Sonnet | console.anthropic.com | 1st |
-| GPT-4o | platform.openai.com | 2nd |
-| Gemini 1.5 Flash | aistudio.google.com | 3rd |
-| Groq Llama 3.3 | console.groq.com | 4th |
-
-System auto-falls back on 429 / credit errors. Check `/api/ai/health` for provider status.
+| Problem | Cause | Fix |
+|---------|-------|-----|
+| "Invalid credentials" on login | Wrong email/password in .env | Check `OWNER_EMAIL` and `OWNER_PASSWORD` in `backend/.env` |
+| WhatsApp messages not arriving | Webhook not verified or wrong token | Set webhook URL in Meta Portal; ensure `WHATSAPP_VERIFY_TOKEN` matches |
+| "AI not responding" in chat | No API key configured | Add at least one key in Settings → AI Configuration, or set `GROQ_API_KEY` in .env (free) |
+| 500 error on startup | Database not set up | Run `schema.sql` then `seed.sql` in your PostgreSQL database |
+| CORS errors in browser | `FRONTEND_URL` mismatch | Set `FRONTEND_URL` in backend `.env` to your exact frontend URL (no trailing slash) |
+| Messages not deduplicating | Old schema missing `message_id` column | Re-run `database/schema.sql` — it's idempotent with `IF NOT EXISTS` |
+| Socket.io not connecting | Wrong socket path | Ensure frontend connects with `path: '/socket.io'` (already set in Inbox.jsx) |
+| Railway deployment fails | Missing env vars | Check all required variables are set in Railway dashboard → Variables tab |
+| Vercel routing shows 404 | SPA routes not rewriting | Ensure `vercel.json` is in the `/frontend` folder with the `rewrites` rule |
+| AI quota exhausted | All provider keys depleted | Check `/api/ai/health` for provider status; add a Groq key (free tier) as fallback |
+| Payments page empty | No payment records yet | Log into a WhatsApp and complete a purchase flow to generate test payments |
+| Follow-ups not auto-sending | Cron not running | Cron runs server-side every hour; check backend logs for `[CRON]` entries |
 
 ---
 
-## 🆘 Common Issues
+## Project Structure
 
-| Problem | Fix |
-|---|---|
-| "Invalid credentials" on login | Check `OWNER_EMAIL`/`OWNER_PASSWORD` in `backend/.env` |
-| WhatsApp not receiving messages | Verify webhook is HTTPS, verify token matches |
-| AI not responding | Check API key in Settings, visit `/api/ai/health` |
-| Database errors | Make sure `schema.sql` ran before `seed.sql` |
-| CORS errors | Set `FRONTEND_URL` correctly in `.env` |
+```
+clientflow-ai/
+├── frontend/                  # React + Vite + Tailwind
+│   ├── src/
+│   │   ├── components/        # Sidebar, StatCard, ChatBubble, DataTable, Toast, AlertBell
+│   │   ├── context/           # AuthContext (JWT)
+│   │   ├── pages/             # 13 dashboard pages
+│   │   └── utils/api.js       # Axios instance with auth header
+│   ├── vercel.json            # Vercel SPA deploy config
+│   └── vite.config.js
+├── backend/                   # Node.js + Express
+│   ├── routes/                # 15 REST route files
+│   ├── services/
+│   │   ├── aiService.js       # Multi-provider AI with fallback
+│   │   ├── whatsappService.js # Meta Cloud API sender
+│   │   └── cronService.js     # Scheduled follow-up runner
+│   ├── middleware/auth.js     # JWT verification
+│   ├── db/index.js            # PostgreSQL pool
+│   ├── server.js              # Express app + Socket.io
+│   ├── Dockerfile             # Production container
+│   └── railway.json           # Railway deploy config
+├── database/
+│   ├── schema.sql             # 14 tables (idempotent)
+│   └── seed.sql               # Default services + settings
+├── .env.example
+└── README.md
+```
 
 ---
 
