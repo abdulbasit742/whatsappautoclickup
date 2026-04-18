@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
 const { sendText } = require('../services/whatsappService');
+const planLimits = require('../middleware/planLimits');
 
 router.use(auth);
 
@@ -16,7 +17,7 @@ router.get('/', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', planLimits('appointments'), async (req, res) => {
   try {
     const { client_id, slot_datetime, notes } = req.body;
     const r = await db.query(
@@ -26,6 +27,13 @@ router.post('/', async (req, res) => {
     const client = (await db.query(`SELECT whatsapp_number,name FROM clients WHERE id=$1`, [client_id])).rows[0];
     const dt = new Date(slot_datetime).toLocaleString('en-PK');
     await sendText(client.whatsapp_number, `📅 Your appointment is confirmed for *${dt}*. We look forward to speaking with you! 😊`);
+    // Increment usage counter
+    if (req.subscription) {
+      await db.query(
+        `UPDATE subscriptions SET usage_appointments = usage_appointments + 1 WHERE id=$1`,
+        [req.subscription.id]
+      );
+    }
     res.json(r.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

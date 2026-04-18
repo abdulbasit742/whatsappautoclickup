@@ -156,12 +156,52 @@ async function sendWeeklySummary() {
   }
 }
 
+// ─── Subscription Billing Cycle (runs daily at midnight) ────────────────────────
+async function processSubscriptionRenewals() {
+  try {
+    // 1. Expire subscriptions scheduled for cancellation at period end
+    await db.query(
+      `UPDATE subscriptions
+       SET status='cancelled', cancelled_at=NOW(), updated_at=NOW()
+       WHERE cancel_at_period_end=TRUE AND current_period_end <= NOW() AND status='active'`
+    );
+
+    // 2. Mark subscriptions as past_due if period has ended and they're still active (non-free)
+    await db.query(
+      `UPDATE subscriptions s
+       SET status='past_due', updated_at=NOW()
+       FROM plans p
+       WHERE s.plan_id=p.id AND p.name != 'free'
+         AND s.status='active' AND s.current_period_end <= NOW()
+         AND s.cancel_at_period_end=FALSE`
+    );
+
+    // 3. Reset monthly usage counters for active subscriptions at new period start
+    await db.query(
+      `UPDATE subscriptions
+       SET usage_broadcasts=0, usage_ai_messages=0, usage_appointments=0,
+           current_period_start=current_period_end,
+           current_period_end=CASE billing_cycle
+             WHEN 'yearly'  THEN current_period_end + INTERVAL '1 year'
+             ELSE current_period_end + INTERVAL '1 month'
+           END,
+           updated_at=NOW()
+       WHERE status='active' AND current_period_end <= NOW()`
+    );
+
+    console.log('[Cron] Subscription renewals processed');
+  } catch (err) {
+    console.error('[Cron] Subscription renewal error:', err.message);
+  }
+}
+
 function initCronJobs() {
   cron.schedule('0 * * * *',       runFollowUps);              // every hour
   cron.schedule('*/15 * * * *',    runAppointmentReminders);   // every 15 min
   cron.schedule('*/15 * * * *',    runScheduledBroadcasts);    // every 15 min
   cron.schedule('0 */6 * * *',     scheduleInactiveAlerts);    // every 6 hours
   cron.schedule('0 9 * * 1',       sendWeeklySummary);         // every Monday 9am
+  cron.schedule('0 0 * * *',       processSubscriptionRenewals); // daily midnight
   console.log('[Cron] All jobs initialized');
 }
 

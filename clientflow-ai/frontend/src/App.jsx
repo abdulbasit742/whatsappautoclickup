@@ -17,6 +17,8 @@ import Templates from './pages/Templates';
 import Appointments from './pages/Appointments';
 import Referrals from './pages/Referrals';
 import Settings from './pages/Settings';
+import Pricing from './pages/Pricing';
+import Subscription from './pages/Subscription';
 
 function Layout({ children }) {
   return (
@@ -59,6 +61,8 @@ export default function App() {
           <Route path="/appointments" element={<Protected><Appointments /></Protected>} />
           <Route path="/referrals"   element={<Protected><Referrals /></Protected>} />
           <Route path="/settings"    element={<Protected><Settings /></Protected>} />
+          <Route path="/pricing"     element={<Protected><Pricing /></Protected>} />
+          <Route path="/subscription" element={<Protected><Subscription /></Protected>} />
         </Routes>
       </BrowserRouter>
       </ToastProvider>

@@ -3,11 +3,22 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const { generateAIResponse } = require('../services/aiService');
 const db = require('../db');
+const planLimits = require('../middleware/planLimits');
 
 router.use(auth);
 
+// Helper to increment AI usage counter
+async function incrementAiUsage(subscription) {
+  if (subscription) {
+    await db.query(
+      `UPDATE subscriptions SET usage_ai_messages = usage_ai_messages + 1 WHERE id=$1`,
+      [subscription.id]
+    ).catch(() => {});
+  }
+}
+
 // ─── AI Broadcast Writer ──────────────────────────────────────────────────────
-router.post('/write-broadcast', async (req, res) => {
+router.post('/write-broadcast', planLimits('ai_messages'), async (req, res) => {
   try {
     const { topic, tone, audience } = req.body;
     const settings = (await db.query(`SELECT key, value FROM settings`)).rows;
@@ -24,12 +35,13 @@ Keep under 200 words. Write in a ${tone || 'friendly'} tone for ${audience || 'a
       userMessage: `Write a WhatsApp broadcast message about: ${topic}`,
     });
 
+    await incrementAiUsage(req.subscription);
     res.json({ message: result.response, provider: result.providerUsed });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ─── AI Quick Reply Suggestion ────────────────────────────────────────────────
-router.post('/suggest-reply', async (req, res) => {
+router.post('/suggest-reply', planLimits('ai_messages'), async (req, res) => {
   try {
     const { clientId, lastMessage } = req.body;
     const settings = (await db.query(`SELECT key, value FROM settings`)).rows;
@@ -55,6 +67,7 @@ Write a short, helpful reply (max 3 sentences). No markdown. Use emojis sparingl
     }
 
     const result = await generateAIResponse({ systemPrompt, conversationHistory: history, userMessage: lastMessage });
+    await incrementAiUsage(req.subscription);
     res.json({ reply: result.response, provider: result.providerUsed });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -68,7 +81,7 @@ router.get('/health', async (req, res) => {
 });
 
 // ─── Upsell Message Generator ─────────────────────────────────────────────────
-router.post('/upsell', async (req, res) => {
+router.post('/upsell', planLimits('ai_messages'), async (req, res) => {
   try {
     const { clientId, serviceId } = req.body;
     const client = (await db.query(`SELECT * FROM clients WHERE id=$1`, [clientId])).rows[0];
@@ -84,6 +97,7 @@ After delivering a service, suggest a related next service. No markdown, no aste
       userMessage: `Client just received: "${service?.name}". Suggest one of these related services: ${otherServices.map(s => `${s.name} (PKR ${s.price_pkr})`).join(', ')}. Client name: ${client?.name || 'valued client'}.`,
     });
 
+    await incrementAiUsage(req.subscription);
     res.json({ message: result.response });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

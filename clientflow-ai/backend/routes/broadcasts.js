@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
 const { sendText } = require('../services/whatsappService');
+const planLimits = require('../middleware/planLimits');
 
 router.use(auth);
 
@@ -13,13 +14,20 @@ router.get('/', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', planLimits('broadcasts'), async (req, res) => {
   try {
     const { title, message, target_audience, scheduled_at } = req.body;
     const r = await db.query(
       `INSERT INTO broadcasts (title,message,target_audience,scheduled_at,status) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
       [title, message, target_audience, scheduled_at, scheduled_at ? 'scheduled' : 'draft']
     );
+    // Increment usage counter
+    if (req.subscription) {
+      await db.query(
+        `UPDATE subscriptions SET usage_broadcasts = usage_broadcasts + 1 WHERE id=$1`,
+        [req.subscription.id]
+      );
+    }
     res.json(r.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

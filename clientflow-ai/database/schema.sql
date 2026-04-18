@@ -182,3 +182,101 @@ CREATE TABLE settings (
   value      TEXT,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ─── PLANS ──────────────────────────────────────────────────────────────────────
+-- Defines the available subscription tiers and their feature limits.
+CREATE TABLE plans (
+  id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name                  VARCHAR(50) UNIQUE NOT NULL,          -- 'free' | 'basic' | 'pro' | 'enterprise'
+  display_name          VARCHAR(100) NOT NULL,
+  price_monthly_pkr     NUMERIC(10,2) NOT NULL DEFAULT 0,
+  price_yearly_pkr      NUMERIC(10,2) NOT NULL DEFAULT 0,
+  -- Feature limits (-1 = unlimited)
+  max_clients           INT NOT NULL DEFAULT 50,
+  max_broadcasts        INT NOT NULL DEFAULT 5,               -- per month
+  max_templates         INT NOT NULL DEFAULT 5,
+  max_appointments      INT NOT NULL DEFAULT 20,              -- per month
+  max_ai_messages       INT NOT NULL DEFAULT 100,             -- per month
+  max_team_members      INT NOT NULL DEFAULT 1,
+  -- Feature flags
+  ai_enabled            BOOLEAN NOT NULL DEFAULT FALSE,
+  analytics_enabled     BOOLEAN NOT NULL DEFAULT FALSE,
+  referrals_enabled     BOOLEAN NOT NULL DEFAULT FALSE,
+  whatsapp_api_enabled  BOOLEAN NOT NULL DEFAULT FALSE,
+  custom_branding       BOOLEAN NOT NULL DEFAULT FALSE,
+  priority_support      BOOLEAN NOT NULL DEFAULT FALSE,
+  is_active             BOOLEAN NOT NULL DEFAULT TRUE,
+  sort_order            SMALLINT NOT NULL DEFAULT 0,
+  created_at            TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Seed default plans
+INSERT INTO plans (name, display_name, price_monthly_pkr, price_yearly_pkr,
+                   max_clients, max_broadcasts, max_templates, max_appointments, max_ai_messages, max_team_members,
+                   ai_enabled, analytics_enabled, referrals_enabled, whatsapp_api_enabled, custom_branding, priority_support, sort_order)
+VALUES
+  ('free',       'Free',       0,        0,
+   50,   5,   5,   10,  50,  1,
+   FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, 1),
+
+  ('basic',      'Basic',      2999,     29990,
+   500,  20,  20,  100, 500, 1,
+   TRUE,  FALSE, FALSE, TRUE,  FALSE, FALSE, 2),
+
+  ('pro',        'Pro',        6999,     69990,
+   2000, 100, 50,  500, 2000, 3,
+   TRUE,  TRUE,  TRUE,  TRUE,  FALSE, FALSE, 3),
+
+  ('enterprise', 'Enterprise', 14999,    149990,
+   -1,   -1,  -1,  -1,  -1,  -1,
+   TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  4);
+
+-- ─── SUBSCRIPTIONS ──────────────────────────────────────────────────────────────
+-- Tracks which plan the owner is currently on and billing cycle details.
+CREATE TABLE subscriptions (
+  id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  owner_email       VARCHAR(150) NOT NULL,
+  plan_id           UUID NOT NULL REFERENCES plans(id),
+  billing_cycle     VARCHAR(10) NOT NULL DEFAULT 'monthly' CHECK (billing_cycle IN ('monthly','yearly')),
+  status            VARCHAR(20)  NOT NULL DEFAULT 'active'
+                    CHECK (status IN ('active','cancelled','past_due','trialing','paused')),
+  trial_ends_at     TIMESTAMPTZ,
+  current_period_start TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  current_period_end   TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '1 month'),
+  cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE,
+  cancelled_at      TIMESTAMPTZ,
+  -- Running usage counters for the current billing period
+  usage_clients     INT NOT NULL DEFAULT 0,
+  usage_broadcasts  INT NOT NULL DEFAULT 0,
+  usage_ai_messages INT NOT NULL DEFAULT 0,
+  usage_appointments INT NOT NULL DEFAULT 0,
+  notes             TEXT,
+  created_at        TIMESTAMPTZ DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_subscriptions_owner ON subscriptions(owner_email);
+CREATE INDEX idx_subscriptions_status ON subscriptions(status);
+
+-- ─── SUBSCRIPTION INVOICES ───────────────────────────────────────────────────────
+-- Records every billing event and manual payment confirmation.
+CREATE TABLE subscription_invoices (
+  id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  subscription_id  UUID NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+  plan_id          UUID NOT NULL REFERENCES plans(id),
+  billing_cycle    VARCHAR(10) NOT NULL DEFAULT 'monthly',
+  amount_pkr       NUMERIC(10,2) NOT NULL,
+  status           VARCHAR(20) NOT NULL DEFAULT 'pending'
+                   CHECK (status IN ('pending','paid','failed','refunded','waived')),
+  payment_method   VARCHAR(30) CHECK (payment_method IN ('easypaisa','jazzcash','bank','cash','stripe','trial')),
+  transaction_ref  VARCHAR(100),
+  screenshot_url   VARCHAR(255),
+  period_start     TIMESTAMPTZ NOT NULL,
+  period_end       TIMESTAMPTZ NOT NULL,
+  paid_at          TIMESTAMPTZ,
+  due_at           TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '7 days'),
+  notes            TEXT,
+  created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_sub_invoices_sub     ON subscription_invoices(subscription_id);
+CREATE INDEX idx_sub_invoices_status  ON subscription_invoices(status);
+CREATE INDEX idx_sub_invoices_created ON subscription_invoices(created_at DESC);

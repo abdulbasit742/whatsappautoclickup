@@ -39,9 +39,13 @@ const analyticsRouter   = require('./routes/analytics');
 const settingsRouter    = require('./routes/settings');
 const followupRouter    = require('./routes/followups');
 const aiRouter          = require('./routes/ai');
+const plansRouter       = require('./routes/plans');
+const subscriptionsRouter = require('./routes/subscriptions');
 
 app.use('/webhook',          webhookRouter);
 app.use('/api/auth',         authRouter);
+app.use('/api/plans',        plansRouter);
+app.use('/api/subscription', subscriptionsRouter);
 app.use('/api/clients',      clientRouter);
 app.use('/api/payments',     paymentRouter);
 app.use('/api/services',     serviceRouter);
