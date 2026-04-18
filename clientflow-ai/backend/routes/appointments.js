@@ -40,10 +40,15 @@ router.post('/', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+const ALLOWED_STATUSES = ['pending', 'confirmed', 'cancelled', 'completed'];
+
 router.put('/:id', async (req, res) => {
   try {
     const { status } = req.body;
     if (!status) return res.status(400).json({ error: 'status is required' });
+    if (!ALLOWED_STATUSES.includes(status)) {
+      return res.status(400).json({ error: `status must be one of: ${ALLOWED_STATUSES.join(', ')}` });
+    }
     const r = await db.query(
       `UPDATE appointments SET status=$1 WHERE id=$2 RETURNING *`,
       [status, req.params.id]

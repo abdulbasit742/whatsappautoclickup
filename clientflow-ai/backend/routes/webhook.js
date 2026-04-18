@@ -250,7 +250,7 @@ async function handleOnboarding(client, to, isNew, settings) {
   if (isNew) {
     await db.query(
       `INSERT INTO follow_ups (client_id, type, scheduled_at) VALUES ($1,'cold_lead', NOW() + INTERVAL '24 hours')
-       ON CONFLICT DO NOTHING`,
+       ON CONFLICT (client_id, type) WHERE (status = 'pending') DO NOTHING`,
       [client.id]
     ).catch(() => {});
   }
@@ -286,7 +286,7 @@ async function handlePaymentInstructions(client, to, settings) {
   // Schedule pending payment follow-up (avoid duplicates)
   await db.query(
     `INSERT INTO follow_ups (client_id, type, scheduled_at) VALUES ($1,'pending_payment', NOW() + INTERVAL '24 hours')
-     ON CONFLICT DO NOTHING`,
+     ON CONFLICT (client_id, type) WHERE (status = 'pending') DO NOTHING`,
     [client.id]
   ).catch(() => {});
 }
