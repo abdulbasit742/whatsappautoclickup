@@ -168,6 +168,9 @@ async function handlePaymentInstructions(client, to) {
   );
 }
 
+// Static star strings — avoids user-controlled repeat() calls
+const STAR_STRINGS = { 1: '⭐', 2: '⭐⭐', 3: '⭐⭐⭐', 4: '⭐⭐⭐⭐', 5: '⭐⭐⭐⭐⭐' };
+
 async function handleReview(client, to, rating) {
   // Clamp rating to the valid 1-5 range to prevent resource exhaustion
   const safeRating = Math.min(5, Math.max(1, Math.floor(rating)));
@@ -176,7 +179,7 @@ async function handleReview(client, to, rating) {
     `INSERT INTO reviews (client_id, rating, sentiment) VALUES ($1,$2,$3)`,
     [client.id, safeRating, sentiment]
   );
-  const stars = '⭐'.repeat(safeRating);
+  const stars = STAR_STRINGS[safeRating];
   await sendText(to, `${stars} Thank you for your rating! Your feedback means a lot to us. 🙏`);
   if (safeRating >= 4) {
     await sendText(to, `We're so glad you had a great experience! Would you like to try any of our other services? Type *pricing* to see options. 🚀`);
