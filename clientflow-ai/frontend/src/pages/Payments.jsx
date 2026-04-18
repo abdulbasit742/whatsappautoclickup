@@ -14,6 +14,8 @@ export default function Payments() {
   const [filter, setFilter]       = useState('all');
   const [preview, setPreview]     = useState(null);
   const [stats, setStats]         = useState({ total: 0, confirmed: 0, pending: 0, revenue: 0 });
+  const [confirming, setConfirming] = useState(null); // id being confirmed
+  const [error, setError]         = useState('');
 
   useEffect(() => {
     api.get('/payments').then(r => {
@@ -25,13 +27,27 @@ export default function Payments() {
         pending:   r.data.filter(p => p.status === 'pending').length,
         revenue:   confirmed.reduce((sum, p) => sum + parseFloat(p.amount_pkr || 0), 0),
       });
-    });
+    }).catch(e => setError(e.response?.data?.error || e.message));
   }, []);
 
   const confirm = async id => {
-    await api.put(`/payments/${id}/confirm`);
-    setPayments(p => p.map(x => x.id === id ? { ...x, status: 'confirmed' } : x));
-    setStats(s => ({ ...s, confirmed: s.confirmed + 1, pending: s.pending - 1 }));
+    if (confirming) return; // prevent double-click
+    setConfirming(id);
+    setError('');
+    try {
+      await api.put(`/payments/${id}/confirm`);
+      setPayments(p => p.map(x => x.id === id ? { ...x, status: 'confirmed' } : x));
+      setStats(s => ({
+        ...s,
+        confirmed: s.confirmed + 1,
+        pending: Math.max(0, s.pending - 1),
+        revenue: s.revenue + parseFloat(payments.find(p => p.id === id)?.amount_pkr || 0),
+      }));
+    } catch (e) {
+      setError('Failed to confirm payment: ' + (e.response?.data?.error || e.message));
+    } finally {
+      setConfirming(null);
+    }
   };
 
   const filtered = payments.filter(p => filter === 'all' ? true : p.status === filter);
@@ -39,6 +55,13 @@ export default function Payments() {
   return (
     <div>
       <h2 className="text-xl font-bold mb-6 text-white">Payments</h2>
+
+      {error && (
+        <div className="mb-4 bg-red-500/10 border border-red-500/30 text-red-400 text-sm px-4 py-3 rounded-xl flex items-center justify-between">
+          <span>{error}</span>
+          <button onClick={() => setError('')} className="text-red-400 hover:text-red-300 ml-4">✕</button>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -109,8 +132,12 @@ export default function Payments() {
                       </button>
                     )}
                     {p.status === 'pending' && (
-                      <button onClick={() => confirm(p.id)} className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300">
-                        <CheckCircle size={12}/> Confirm
+                      <button
+                        onClick={() => confirm(p.id)}
+                        disabled={confirming === p.id}
+                        className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <CheckCircle size={12}/> {confirming === p.id ? 'Confirming…' : 'Confirm'}
                       </button>
                     )}
                   </div>
@@ -137,8 +164,9 @@ export default function Payments() {
             </div>
             {preview.status === 'pending' && (
               <button onClick={() => { confirm(preview.id); setPreview(null); }}
-                className="w-full mt-4 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white py-2 rounded-lg text-sm font-medium">
-                <CheckCircle size={14}/> Confirm Payment
+                disabled={confirming === preview.id}
+                className="w-full mt-4 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white py-2 rounded-lg text-sm font-medium">
+                <CheckCircle size={14}/> {confirming === preview.id ? 'Confirming…' : 'Confirm Payment'}
               </button>
             )}
           </div>

@@ -29,7 +29,7 @@ router.post('/:id/send', async (req, res) => {
     const broadcast = (await db.query(`SELECT * FROM broadcasts WHERE id=$1`, [req.params.id])).rows[0];
     if (!broadcast) return res.status(404).json({ error: 'Not found' });
 
-    let clientQ = `SELECT id, whatsapp_number FROM clients WHERE status != 'blocked'`;
+    let clientQ = `SELECT id, whatsapp_number, name FROM clients WHERE status != 'blocked'`;
     if (broadcast.target_audience === 'paid') clientQ += ` AND status='paid'`;
     else if (broadcast.target_audience === 'inactive') clientQ += ` AND last_active_at < NOW() - INTERVAL '14 days'`;
     else if (broadcast.target_audience === 'leads') clientQ += ` AND status='lead'`;
@@ -39,13 +39,19 @@ router.post('/:id/send', async (req, res) => {
 
     for (const c of clients) {
       try {
-        await sendText(c.whatsapp_number, broadcast.message);
+        // Interpolate {{client_name}} placeholder
+        const msg = broadcast.message.replace(/\{\{client_name\}\}/g, c.name || 'there');
+        // Pass c.id so outbound broadcast messages are logged per-client
+        await sendText(c.whatsapp_number, msg, c.id);
         await db.query(
-          `INSERT INTO broadcast_recipients (broadcast_id,client_id,delivered) VALUES ($1,$2,true)`,
+          `INSERT INTO broadcast_recipients (broadcast_id,client_id,delivered) VALUES ($1,$2,true)
+           ON CONFLICT DO NOTHING`,
           [broadcast.id, c.id]
         );
         sent++;
-      } catch { /* skip failed */ }
+        // Small delay to avoid WhatsApp rate limits on burst sends
+        await new Promise(r => setTimeout(r, 100));
+      } catch { /* skip failed individual sends */ }
     }
 
     await db.query(

@@ -35,21 +35,25 @@ export default function ClientProfile() {
   const [notes, setNotes]       = useState('');
   const [showAddFollowup, setShowAddFollowup] = useState(false);
   const [newFu, setNewFu]       = useState({ type: 'cold_lead', scheduled_at: '' });
+  const [actionError, setActionError] = useState('');
 
-  const loadData = () => Promise.all([
-    api.get(`/clients/${id}`),
-    api.get(`/clients/${id}/messages`),
-    api.get(`/payments?client_id=${id}`),
-    api.get(`/reviews?client_id=${id}`),
-    api.get(`/followups?client_id=${id}&status=pending`),
-  ]).then(([c, m, p, r, fu]) => {
-    setClient(c.data);
-    setNotes(c.data.notes || '');
-    setMessages(m.data);
-    setPayments(p.data);
-    setReviews(r.data);
-    setFollowups(fu.data);
-  });
+  const loadData = () => {
+    setActionError('');
+    return Promise.all([
+      api.get(`/clients/${id}`),
+      api.get(`/clients/${id}/messages`),
+      api.get(`/payments?client_id=${id}`),
+      api.get(`/reviews?client_id=${id}`),
+      api.get(`/followups?client_id=${id}&status=pending`),
+    ]).then(([c, m, p, r, fu]) => {
+      setClient(c.data);
+      setNotes(c.data.notes || '');
+      setMessages(m.data);
+      setPayments(p.data);
+      setReviews(r.data);
+      setFollowups(fu.data);
+    }).catch(e => setActionError('Failed to load client data: ' + (e.response?.data?.error || e.message)));
+  };
 
   useEffect(() => { loadData(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -57,40 +61,62 @@ export default function ClientProfile() {
     if (!reply.trim()) return;
     const text = reply;
     setReply('');
-    await api.post(`/clients/${id}/send`, { message: text });
-    setMessages(m => [...m, { id: Date.now(), direction: 'outbound', content: text, created_at: new Date() }]);
+    setActionError('');
+    try {
+      await api.post(`/clients/${id}/send`, { message: text });
+      setMessages(m => [...m, { id: Date.now(), direction: 'outbound', content: text, created_at: new Date() }]);
+    } catch (e) {
+      setActionError('Failed to send message: ' + (e.response?.data?.error || e.message));
+    }
   };
 
   const saveNotes = async () => {
     setSaving(true);
+    setActionError('');
     try {
-      await api.put(`/clients/${id}`, { ...client, notes });
+      await api.put(`/clients/${id}`, { notes });
+    } catch (e) {
+      setActionError('Failed to save notes: ' + (e.response?.data?.error || e.message));
     } finally {
       setSaving(false);
     }
   };
 
   const triggerFollowUp = async (fuId) => {
-    await api.post(`/followups/trigger/${fuId}`);
-    await loadData();
-    alert('Follow-up sent!');
+    setActionError('');
+    try {
+      await api.post(`/followups/trigger/${fuId}`);
+      await loadData();
+    } catch (e) {
+      setActionError('Failed to trigger follow-up: ' + (e.response?.data?.error || e.message));
+    }
   };
 
   const addFollowUp = async () => {
-    if (!newFu.scheduled_at) return alert('Please set a scheduled date/time');
-    await api.post('/followups', { client_id: id, ...newFu });
-    setShowAddFollowup(false);
-    setNewFu({ type: 'cold_lead', scheduled_at: '' });
-    await loadData();
+    if (!newFu.scheduled_at) { setActionError('Please set a scheduled date/time'); return; }
+    setActionError('');
+    try {
+      await api.post('/followups', { client_id: id, ...newFu });
+      setShowAddFollowup(false);
+      setNewFu({ type: 'cold_lead', scheduled_at: '' });
+      await loadData();
+    } catch (e) {
+      setActionError('Failed to add follow-up: ' + (e.response?.data?.error || e.message));
+    }
   };
 
   const confirmPayment = async (payId) => {
     if (!window.confirm('Confirm this payment?')) return;
-    await api.put(`/payments/${payId}/confirm`);
-    await loadData();
+    setActionError('');
+    try {
+      await api.put(`/payments/${payId}/confirm`);
+      await loadData();
+    } catch (e) {
+      setActionError('Failed to confirm payment: ' + (e.response?.data?.error || e.message));
+    }
   };
 
-  if (!client) return <div className="text-gray-400 p-6">Loading...</div>;
+  if (!client) return <div className="text-gray-400 p-6">{actionError || 'Loading…'}</div>;
 
   return (
     <div>
@@ -107,6 +133,13 @@ export default function ClientProfile() {
           {client.status}
         </span>
       </div>
+
+      {actionError && (
+        <div className="mb-4 bg-red-500/10 border border-red-500/30 text-red-400 text-sm px-4 py-3 rounded-xl flex items-center justify-between">
+          <span>{actionError}</span>
+          <button onClick={() => setActionError('')} className="text-red-400 hover:text-red-300 ml-4">✕</button>
+        </div>
+      )}
 
       {/* Stats Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">

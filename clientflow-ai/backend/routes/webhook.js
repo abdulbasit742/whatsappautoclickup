@@ -62,8 +62,12 @@ router.post('/', async (req, res) => {
     const msgs = value?.messages;
     if (!msgs?.length) return;
 
-    // Load all settings once for this webhook batch
-    const settings = await loadSettings();
+    // Load all settings and active services once for this webhook batch
+    const [settings, activeServicesRes] = await Promise.all([
+      loadSettings(),
+      db.query(`SELECT name FROM services WHERE is_active=true`),
+    ]);
+    const activeServices = activeServicesRes.rows;
 
     for (const msg of msgs) {
       const from = msg.from;
@@ -191,8 +195,8 @@ router.post('/', async (req, res) => {
 
       // ─── Service selection detection ──────────────────────────────────────
       // If the client names a specific service, route to payment instructions
-      const activeServices = await db.query(`SELECT name FROM services WHERE is_active=true`);
-      const namedService = activeServices.rows.find(s => lc.includes(s.name.toLowerCase()));
+      // Uses activeServices loaded once per webhook batch (no per-message DB query)
+      const namedService = activeServices.find(s => lc.includes(s.name.toLowerCase()));
       if (namedService) {
         await sendText(from,
           `✅ Great choice! *${namedService.name}* is one of our most popular services! 🎉\n\nTo get started, please make the payment using the details below and share the screenshot here. 💰`,
@@ -382,11 +386,14 @@ async function handleAIResponse(client, to, userMessage, settings, io) {
   const shouldFlag = flagKeywords.some(k => userMessage.toLowerCase().includes(k)) || isWeak;
   const priority = flagKeywords.some(k => userMessage.toLowerCase().includes(k)) ? 'high' : isWeak ? 'medium' : 'low';
 
-  // Log AI message to DB first, then send via WhatsApp
-  await db.query(
-    `INSERT INTO messages (client_id, direction, content, ai_provider_used, is_flagged) VALUES ($1,'outbound',$2,$3,$4)`,
+  // Log AI message to DB first (captures ai_provider_used and is_flagged),
+  // then send via WhatsApp and update the record with the WA message ID.
+  // NOTE: sendText is called WITHOUT clientId to avoid double-logging.
+  const msgInsert = await db.query(
+    `INSERT INTO messages (client_id, direction, content, ai_provider_used, is_flagged) VALUES ($1,'outbound',$2,$3,$4) RETURNING id`,
     [client.id, response, providerUsed, shouldFlag]
   );
+  const msgDbId = msgInsert.rows[0]?.id;
 
   if (shouldFlag) {
     await db.query(
@@ -396,8 +403,16 @@ async function handleAIResponse(client, to, userMessage, settings, io) {
     io?.emit('new_alert', { type: 'unresolved_query', clientId: client.id, priority });
   }
 
-  // Pass clientId so the WA message ID is stored back on the logged message
-  await sendText(to, response, client.id);
+  // Send the message without clientId — logOutbound is handled by the INSERT above
+  const waData = await sendText(to, response);
+  const waId = waData?.messages?.[0]?.id;
+  if (waId && msgDbId) {
+    // Backfill the WA message ID on the already-inserted record
+    await db.query(
+      `UPDATE messages SET whatsapp_message_id=$1 WHERE id=$2`,
+      [waId, msgDbId]
+    ).catch(() => {});
+  }
 }
 
 module.exports = router;

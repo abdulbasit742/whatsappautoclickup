@@ -33,27 +33,46 @@ const FIELDS = [
 export default function Settings() {
   const [settings, setSettings] = useState({});
   const [saved, setSaved]       = useState(false);
+  const [error, setError]       = useState('');
+  const [saving, setSaving]     = useState(false);
 
   useEffect(() => {
-    api.get('/settings').then(r => setSettings(r.data));
+    api.get('/settings')
+      .then(r => setSettings(r.data))
+      .catch(e => setError('Failed to load settings: ' + (e.response?.data?.error || e.message)));
   }, []);
 
   const update = (key, value) => setSettings(s => ({ ...s, [key]: value }));
 
   const save = async () => {
-    await api.put('/settings', settings);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setSaving(true);
+    setError('');
+    try {
+      await api.put('/settings', settings);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e) {
+      setError('Failed to save: ' + (e.response?.data?.error || e.message));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-bold text-white">Settings</h2>
-        <button onClick={save} className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-          <Save size={16} /> {saved ? 'Saved!' : 'Save All'}
+        <button onClick={save} disabled={saving} className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+          <Save size={16} /> {saved ? 'Saved!' : saving ? 'Saving…' : 'Save All'}
         </button>
       </div>
+
+      {error && (
+        <div className="mb-4 bg-red-500/10 border border-red-500/30 text-red-400 text-sm px-4 py-3 rounded-xl flex items-center justify-between">
+          <span>{error}</span>
+          <button onClick={() => setError('')} className="text-red-400 hover:text-red-300 ml-4">✕</button>
+        </div>
+      )}
 
       <div className="space-y-6">
         {FIELDS.map(({ section, keys }) => (
