@@ -21,6 +21,7 @@ router.post('/:id/reward', async (req, res) => {
   try {
     const { message } = req.body;
     const client = (await db.query(`SELECT whatsapp_number FROM clients WHERE id=$1`, [req.params.id])).rows[0];
+    if (!client) return res.status(404).json({ error: 'Client not found' });
     await sendText(client.whatsapp_number, message || '🎉 Thank you for referring clients! Here is your reward. We appreciate you! 🙏');
     await db.query(`UPDATE referrals SET reward_sent=true, reward_sent_at=NOW() WHERE referrer_id=$1`, [req.params.id]);
     res.json({ success: true });

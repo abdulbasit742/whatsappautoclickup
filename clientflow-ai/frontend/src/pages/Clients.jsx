@@ -15,11 +15,16 @@ const STATUS_COLORS = {
 
 export default function Clients() {
   const [clients, setClients] = useState([]);
-  const [search, setSearch] = useState('');
+  const [search, setSearch]   = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
-    api.get('/clients').then(r => setClients(r.data));
+    api.get('/clients')
+      .then(r => setClients(r.data))
+      .catch(e => setError('Failed to load clients: ' + (e.response?.data?.error || e.message)))
+      .finally(() => setLoading(false));
   }, []);
 
   const filtered = clients.filter(c =>
@@ -34,6 +39,15 @@ export default function Clients() {
     { key: 'total_spent_pkr', label: 'Spent',       render: v => `PKR ${Number(v).toLocaleString()}` },
     { key: 'last_active_at',  label: 'Last Active', render: v => format(new Date(v), 'dd MMM HH:mm') },
   ];
+
+  if (loading) return (
+    <div className="flex items-center justify-center h-48 text-gray-400">
+      <div className="text-center">
+        <div className="w-7 h-7 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+        Loading clients...
+      </div>
+    </div>
+  );
 
   return (
     <div>
@@ -50,6 +64,13 @@ export default function Clients() {
           />
         </div>
       </div>
+
+      {error && (
+        <div className="mb-4 bg-red-500/10 border border-red-500/30 text-red-400 text-sm px-4 py-3 rounded-xl">
+          {error}
+        </div>
+      )}
+
       <DataTable columns={cols} data={filtered} onRowClick={r => navigate(`/clients/${r.id}`)} />
     </div>
   );

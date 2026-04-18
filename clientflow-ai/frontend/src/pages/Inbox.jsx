@@ -24,6 +24,7 @@ export default function Inbox() {
   const [aiLoading, setAiLoading]   = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [sending, setSending]       = useState(false);
+  const [sendError, setSendError]   = useState('');
   const bottomRef = useRef(null);
   const templateRef = useRef(null);
 
@@ -89,13 +90,14 @@ export default function Inbox() {
   const send = async () => {
     if (!reply.trim() || !selected || sending) return;
     setSending(true);
+    setSendError('');
     const text = reply;
     setReply('');
     try {
       await api.post(`/clients/${selected.id}/send`, { message: text });
       setMessages(m => [...m, { id: Date.now(), direction: 'outbound', content: text, created_at: new Date() }]);
     } catch (e) {
-      alert('Failed to send: ' + (e.response?.data?.error || e.message));
+      setSendError('Failed to send: ' + (e.response?.data?.error || e.message));
       setReply(text);
     } finally {
       setSending(false);
@@ -105,12 +107,13 @@ export default function Inbox() {
   const suggestReply = async () => {
     if (!selected) return;
     setAiLoading(true);
+    setSendError('');
     try {
       const lastMsg = messages.filter(m => m.direction === 'inbound').slice(-1)[0]?.content || '';
       const r = await api.post('/ai/suggest-reply', { clientId: selected.id, lastMessage: lastMsg });
       setReply(r.data.reply);
     } catch (e) {
-      alert('AI error: ' + (e.response?.data?.error || e.message));
+      setSendError('AI error: ' + (e.response?.data?.error || e.message));
     } finally {
       setAiLoading(false);
     }
@@ -118,19 +121,17 @@ export default function Inbox() {
 
   const triggerFollowUp = async (type) => {
     if (!selected) return;
+    setSendError('');
     try {
-      // Create immediate follow-up
       const fu = await api.post('/followups', {
         client_id: selected.id,
         type,
         scheduled_at: new Date().toISOString(),
       });
-      // Trigger it immediately
       await api.post(`/followups/trigger/${fu.data.id}`);
-      alert('Follow-up sent successfully!');
       await refreshMessages();
     } catch (e) {
-      alert('Failed: ' + (e.response?.data?.error || e.message));
+      setSendError('Failed to send follow-up: ' + (e.response?.data?.error || e.message));
     }
   };
 
@@ -255,6 +256,12 @@ export default function Inbox() {
 
             {/* Reply Box */}
             <div className="p-3 border-t border-[#2a2a2a] shrink-0">
+              {sendError && (
+                <div className="mb-2 bg-red-500/10 border border-red-500/20 text-red-400 text-xs px-3 py-2 rounded-lg flex items-center justify-between">
+                  <span>{sendError}</span>
+                  <button onClick={() => setSendError('')} className="ml-2 hover:text-red-300">✕</button>
+                </div>
+              )}
               <div className="flex gap-2">
                 <div className="flex-1 relative">
                   <textarea

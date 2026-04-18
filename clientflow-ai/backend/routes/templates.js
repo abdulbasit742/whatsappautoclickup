@@ -15,9 +15,11 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const { name, category, content } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'name is required' });
+    if (!content?.trim()) return res.status(400).json({ error: 'content is required' });
     const r = await db.query(
       `INSERT INTO templates (name,category,content) VALUES ($1,$2,$3) RETURNING *`,
-      [name, category, content]
+      [name.trim(), category || null, content.trim()]
     );
     res.json(r.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -27,9 +29,19 @@ router.put('/:id', async (req, res) => {
   try {
     const { name, category, content } = req.body;
     const r = await db.query(
-      `UPDATE templates SET name=$1,category=$2,content=$3 WHERE id=$4 RETURNING *`,
-      [name, category, content, req.params.id]
+      `UPDATE templates
+       SET name     = COALESCE($1, name),
+           category = COALESCE($2, category),
+           content  = COALESCE($3, content)
+       WHERE id=$4 RETURNING *`,
+      [
+        name    !== undefined ? name    : null,
+        category !== undefined ? category : null,
+        content !== undefined ? content : null,
+        req.params.id,
+      ]
     );
+    if (!r.rows[0]) return res.status(404).json({ error: 'Template not found' });
     res.json(r.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

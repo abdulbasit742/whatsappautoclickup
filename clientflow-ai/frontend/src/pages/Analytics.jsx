@@ -40,9 +40,10 @@ export default function Analytics() {
   useEffect(() => { load(); }, []);
 
   const funnelData = [
-    { name: 'Leads',       value: funnel.leads  || 0, color: '#f59e0b' },
-    { name: 'Active',      value: funnel.paid   || 0, color: '#3b82f6' },
-    { name: 'Repeat',      value: funnel.repeat || 0, color: '#10b981' },
+    { name: 'Leads',  value: funnel.leads  || 0, color: '#f59e0b' },
+    { name: 'Active', value: funnel.active || 0, color: '#3b82f6' },
+    { name: 'Paid',   value: funnel.paid   || 0, color: '#10b981' },
+    { name: 'Repeat', value: funnel.repeat || 0, color: '#8b5cf6' },
   ];
 
   return (
