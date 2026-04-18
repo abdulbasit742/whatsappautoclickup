@@ -25,6 +25,9 @@ const FIELDS = [
     { key: 'follow_up_post_delivery_days',  label: 'Post-Delivery Follow-up (days)' },
     { key: 'follow_up_re_engagement_days',  label: 'Re-engagement Follow-up (days)' },
   ]},
+  { section: 'Service Delivery', keys: [
+    { key: 'service_delivery_message', label: 'Service Delivery Message (sent after payment confirmed; use {{name}} for client name)', textarea: true },
+  ]},
   { section: 'AI Configuration', keys: [
     { key: 'ai_provider_priority', label: 'AI Provider Priority (comma-separated)' },
   ]},
@@ -79,14 +82,23 @@ export default function Settings() {
           <div key={section} className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5">
             <h3 className="text-sm font-semibold text-white mb-4">{section}</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {keys.map(({ key, label }) => (
-                <div key={key}>
+              {keys.map(({ key, label, textarea }) => (
+                <div key={key} className={textarea ? 'md:col-span-2' : ''}>
                   <label className="block text-xs text-gray-400 mb-1">{label}</label>
-                  <input
-                    value={settings[key] || ''}
-                    onChange={e => update(key, e.target.value)}
-                    className="w-full bg-[#0f0f0f] border border-[#2a2a2a] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
-                  />
+                  {textarea ? (
+                    <textarea
+                      value={settings[key] || ''}
+                      onChange={e => update(key, e.target.value)}
+                      rows={3}
+                      className="w-full bg-[#0f0f0f] border border-[#2a2a2a] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 resize-none"
+                    />
+                  ) : (
+                    <input
+                      value={settings[key] || ''}
+                      onChange={e => update(key, e.target.value)}
+                      className="w-full bg-[#0f0f0f] border border-[#2a2a2a] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                    />
+                  )}
                 </div>
               ))}
             </div>

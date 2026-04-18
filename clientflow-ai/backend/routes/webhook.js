@@ -128,6 +128,29 @@ router.post('/', async (req, res) => {
           [client.id]
         );
         req.app.get('io')?.emit('new_alert', { type: 'new_client', clientId: client.id, priority: 'medium' });
+
+        // ─── Referral attribution ──────────────────────────────────────────
+        // Detect referral codes (6-char alphanumeric) in the first message and
+        // link the new client to their referrer.
+        if (msgType === 'text') {
+          const codeMatch = content.match(/\b([A-Z0-9]{6})\b/);
+          if (codeMatch) {
+            const referrer = (await db.query(
+              `SELECT id FROM clients WHERE referral_code=$1 AND id!=$2 LIMIT 1`,
+              [codeMatch[1], client.id]
+            )).rows[0];
+            if (referrer) {
+              await db.query(
+                `UPDATE clients SET referred_by_id=$1 WHERE id=$2 AND referred_by_id IS NULL`,
+                [referrer.id, client.id]
+              ).catch(() => {});
+              await db.query(
+                `INSERT INTO referrals (referrer_id, referred_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+                [referrer.id, client.id]
+              ).catch(() => {});
+            }
+          }
+        }
       }
 
       // ─── Save inbound message ──────────────────────────────────────────────

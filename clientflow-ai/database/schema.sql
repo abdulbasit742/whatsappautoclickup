@@ -149,7 +149,8 @@ CREATE TABLE referrals (
   referred_id       UUID REFERENCES clients(id) ON DELETE CASCADE,
   reward_sent       BOOLEAN DEFAULT FALSE,
   reward_sent_at    TIMESTAMPTZ,
-  created_at        TIMESTAMPTZ DEFAULT NOW()
+  created_at        TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(referrer_id, referred_id)
 );
 
 -- ─── FOLLOW UPS ─────────────────────────────────────────────────────────────────
@@ -164,6 +165,9 @@ CREATE TABLE follow_ups (
 );
 CREATE INDEX idx_followups_scheduled ON follow_ups(scheduled_at);
 CREATE INDEX idx_followups_status ON follow_ups(status);
+-- Prevent duplicate pending follow-ups of the same type per client.
+-- ON CONFLICT DO NOTHING in webhook.js relies on this index.
+CREATE UNIQUE INDEX idx_followups_pending_dedup ON follow_ups(client_id, type) WHERE (status = 'pending');
 
 -- ─── AI LOGS ────────────────────────────────────────────────────────────────────
 CREATE TABLE ai_logs (

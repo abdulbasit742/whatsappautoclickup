@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Send, Clock, CheckCircle, RefreshCw, Zap } from 'lucide-react';
 import { format } from 'date-fns';
 import api from '../utils/api';
+import { useToast } from '../components/Toast';
 
 const TYPE_INFO = {
   cold_lead:       { label: 'Cold Lead',        color: 'bg-yellow-500/20 text-yellow-400' },
@@ -20,6 +21,7 @@ const DEFAULT_MESSAGES = {
 };
 
 export default function Followups() {
+  const toast = useToast();
   const [followups, setFollowups]   = useState([]);
   const [sending, setSending]       = useState(null);
   const [editMsg, setEditMsg]       = useState({});
@@ -39,8 +41,9 @@ export default function Followups() {
       const msg = editMsg[f.id] || DEFAULT_MESSAGES[f.type] || 'Hello! Just checking in. 😊';
       await api.post(`/followups/trigger/${f.id}`, { message: msg });
       setFollowups(prev => prev.filter(x => x.id !== f.id));
+      toast('Follow-up sent!', 'success');
     } catch (e) {
-      alert('Failed: ' + (e.response?.data?.error || e.message));
+      toast('Failed: ' + (e.response?.data?.error || e.message), 'error');
     } finally {
       setSending(null);
     }
