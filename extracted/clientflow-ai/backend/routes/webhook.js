@@ -77,6 +77,26 @@ router.post('/', async (req, res) => {
         [client.id, content, msgType, msgId]
       );
 
+      await db.query(`UPDATE clients SET reply_count = reply_count + 1 WHERE id=$1`, [client.id]).catch(() => {});
+
+      // Issue detection
+      const ISSUE_KEYWORDS = {
+        complaint: ['complaint', 'complain', 'problem', 'issue', 'bad', 'worst', 'terrible', 'shikayat', 'masla'],
+        refund: ['refund', 'money back', 'wapis', 'return', 'cancel', 'cancellation'],
+        urgent: ['urgent', 'emergency', 'asap', 'immediately', 'jaldi', 'zaruri'],
+      };
+      const msgLower = (content || '').toLowerCase();
+      for (const [issueType, keywords] of Object.entries(ISSUE_KEYWORDS)) {
+        const matchedKeyword = keywords.find(kw => msgLower.includes(kw));
+        if (matchedKeyword) {
+          await db.query(
+            `INSERT INTO issues (client_id, type, keyword, message) VALUES ($1,$2,$3,$4)`,
+            [client.id, issueType, matchedKeyword, content]
+          ).catch(() => {});
+          break;
+        }
+      }
+
       await db.query(`UPDATE clients SET last_active_at=NOW() WHERE id=$1`, [client.id]);
 
       const workStart = await db.query(`SELECT value FROM settings WHERE key='working_hours_start'`);

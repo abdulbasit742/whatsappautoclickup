@@ -65,4 +65,41 @@ router.get('/funnel', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+router.get('/ai-dashboard', async (req, res) => {
+  try {
+    const [totalRequests, successRate, avgLatency, byProvider, recentLogs, dailyUsage] = await Promise.all([
+      db.query(`SELECT COUNT(*) FROM ai_logs WHERE created_at > NOW() - INTERVAL '30 days'`),
+      db.query(`SELECT ROUND(100.0 * SUM(CASE WHEN success THEN 1 ELSE 0 END) / NULLIF(COUNT(*),0), 1) as rate FROM ai_logs WHERE created_at > NOW() - INTERVAL '30 days'`),
+      db.query(`SELECT ROUND(AVG(latency_ms)) as avg FROM ai_logs WHERE success=true AND created_at > NOW() - INTERVAL '30 days'`),
+      db.query(`SELECT provider, COUNT(*) as count, ROUND(AVG(latency_ms)) as avg_latency FROM ai_logs WHERE created_at > NOW() - INTERVAL '30 days' GROUP BY provider ORDER BY count DESC`),
+      db.query(`SELECT al.*, c.name as client_name FROM ai_logs al LEFT JOIN clients c ON c.id=al.client_id ORDER BY al.created_at DESC LIMIT 20`),
+      db.query(`SELECT DATE_TRUNC('day', created_at) as date, COUNT(*) as count FROM ai_logs WHERE created_at > NOW() - INTERVAL '14 days' GROUP BY 1 ORDER BY 1`),
+    ]);
+    res.json({
+      totalRequests: parseInt(totalRequests.rows[0].count),
+      successRate: parseFloat(successRate.rows[0].rate || 0),
+      avgLatency: parseInt(avgLatency.rows[0].avg || 0),
+      byProvider: byProvider.rows,
+      recentLogs: recentLogs.rows,
+      dailyUsage: dailyUsage.rows,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/campaigns', async (req, res) => {
+  try {
+    const [stats, recent] = await Promise.all([
+      db.query(`SELECT 
+        COUNT(*) FILTER (WHERE status='sent') as completed,
+        COUNT(*) FILTER (WHERE status='scheduled') as running,
+        COUNT(*) FILTER (WHERE status='failed') as failed,
+        COUNT(*) FILTER (WHERE status='draft') as draft,
+        COALESCE(SUM(total_sent),0) as total_messages_sent
+        FROM broadcasts`),
+      db.query(`SELECT * FROM broadcasts ORDER BY created_at DESC LIMIT 20`),
+    ]);
+    res.json({ stats: stats.rows[0], recent: recent.rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;

@@ -182,3 +182,36 @@ CREATE TABLE settings (
   value      TEXT,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ─── USERS (Auth System) ──────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS users (
+  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  email      VARCHAR(150) UNIQUE NOT NULL,
+  password   VARCHAR(255) NOT NULL,
+  name       VARCHAR(100),
+  role       VARCHAR(20) DEFAULT 'agent' CHECK (role IN ('admin','agent')),
+  is_active  BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+-- ─── ISSUES (Issue Tracking) ─────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS issues (
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  client_id   UUID REFERENCES clients(id) ON DELETE CASCADE,
+  type        VARCHAR(30) CHECK (type IN ('complaint','refund','urgent','other')),
+  keyword     VARCHAR(50),
+  message     TEXT,
+  status      VARCHAR(20) DEFAULT 'open' CHECK (status IN ('open','in_progress','resolved')),
+  assigned_to UUID REFERENCES users(id) ON DELETE SET NULL,
+  resolved_at TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_issues_status ON issues(status);
+CREATE INDEX IF NOT EXISTS idx_issues_client ON issues(client_id);
+CREATE INDEX IF NOT EXISTS idx_issues_created ON issues(created_at DESC);
+
+-- ─── CLIENTS ENHANCEMENTS ─────────────────────────────────────────────────────
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}';
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS lead_score VARCHAR(10) DEFAULT 'cold' CHECK (lead_score IN ('hot','warm','cold'));
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS reply_count INT DEFAULT 0;

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Zap } from 'lucide-react';
 
@@ -57,6 +57,9 @@ export default function Login() {
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
+        <p className="text-xs text-center text-gray-500 mt-4">
+          Don&apos;t have an account? <Link to="/signup" className="text-emerald-400 hover:underline">Sign up</Link>
+        </p>
       </div>
     </div>
   );

@@ -39,10 +39,10 @@ router.get('/:id/messages', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
   try {
-    const { name, email, notes, status } = req.body;
+    const { name, email, notes, status, tags, lead_score } = req.body;
     const r = await db.query(
-      `UPDATE clients SET name=$1,email=$2,notes=$3,status=$4 WHERE id=$5 RETURNING *`,
-      [name, email, notes, status, req.params.id]
+      `UPDATE clients SET name=$1,email=$2,notes=$3,status=$4,tags=COALESCE($5,tags),lead_score=COALESCE($6,lead_score) WHERE id=$7 RETURNING *`,
+      [name, email, notes, status, tags, lead_score, req.params.id]
     );
     res.json(r.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }

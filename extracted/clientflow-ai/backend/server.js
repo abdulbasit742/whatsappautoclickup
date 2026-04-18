@@ -56,6 +56,11 @@ app.use('/api/settings',     settingsRouter);
 app.use('/api/followups',    followupRouter);
 app.use('/api/ai',           aiRouter);
 
+const issuesRouter = require('./routes/issues');
+const leadsRouter  = require('./routes/leads');
+app.use('/api/issues', issuesRouter);
+app.use('/api/leads',  leadsRouter);
+
 // ─── Socket.io ───────────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
   console.log('[Socket] Client connected:', socket.id);

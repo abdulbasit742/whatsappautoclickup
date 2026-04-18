@@ -2,7 +2,8 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard, Users, MessageSquare, CreditCard, BarChart2,
-  Star, Megaphone, Package, FileText, Calendar, Link, Settings, LogOut, Zap, Clock
+  Star, Megaphone, Package, FileText, Calendar, Link, Settings, LogOut, Zap, Clock,
+  Brain, AlertTriangle
 } from 'lucide-react';
 
 const links = [
@@ -13,7 +14,10 @@ const links = [
   { to: '/analytics', icon: BarChart2, label: 'Analytics' },
   { to: '/reviews', icon: Star, label: 'Reviews' },
   { to: '/broadcasts', icon: Megaphone, label: 'Broadcasts' },
+  { to: '/campaigns', icon: BarChart2, label: 'Campaigns' },
   { to: '/followups', icon: Clock, label: 'Follow-ups' },
+  { to: '/issues', icon: AlertTriangle, label: 'Issues' },
+  { to: '/ai-dashboard', icon: Brain, label: 'AI Dashboard' },
   { to: '/services', icon: Package, label: 'Services' },
   { to: '/templates', icon: FileText, label: 'Templates' },
   { to: '/appointments', icon: Calendar, label: 'Appointments' },

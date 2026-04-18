@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './components/Toast';
 import Sidebar from './components/Sidebar';
 import Login from './pages/Login';
+import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import Clients from './pages/Clients';
 import ClientProfile from './pages/ClientProfile';
@@ -17,6 +18,9 @@ import Templates from './pages/Templates';
 import Appointments from './pages/Appointments';
 import Referrals from './pages/Referrals';
 import Settings from './pages/Settings';
+import AIDashboard from './pages/AIDashboard';
+import Issues from './pages/Issues';
+import CampaignDashboard from './pages/CampaignDashboard';
 
 function Layout({ children }) {
   return (
@@ -45,6 +49,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
           <Route path="/"            element={<Protected><Dashboard /></Protected>} />
           <Route path="/clients"     element={<Protected><Clients /></Protected>} />
           <Route path="/clients/:id" element={<Protected><ClientProfile /></Protected>} />
@@ -59,6 +64,9 @@ export default function App() {
           <Route path="/appointments" element={<Protected><Appointments /></Protected>} />
           <Route path="/referrals"   element={<Protected><Referrals /></Protected>} />
           <Route path="/settings"    element={<Protected><Settings /></Protected>} />
+          <Route path="/ai-dashboard" element={<Protected><AIDashboard /></Protected>} />
+          <Route path="/issues"      element={<Protected><Issues /></Protected>} />
+          <Route path="/campaigns"   element={<Protected><CampaignDashboard /></Protected>} />
         </Routes>
       </BrowserRouter>
       </ToastProvider>
