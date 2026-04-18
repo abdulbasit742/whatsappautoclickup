@@ -16,7 +16,20 @@ const io = new Server(server, {
 app.set('io', io);
 
 // ─── Security ────────────────────────────────────────────────────────────────────
-app.use(helmet({ contentSecurityPolicy: false }));
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc:  ["'self'"],
+      styleSrc:   ["'self'", "'unsafe-inline'"],
+      imgSrc:     ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'", 'https://api.anthropic.com', 'https://api.openai.com', 'https://generativelanguage.googleapis.com', 'https://api.groq.com'],
+      fontSrc:    ["'self'"],
+      objectSrc:  ["'none'"],
+      upgradeInsecureRequests: [],
+    },
+  },
+}));
 
 // General rate limit: 200 req / 15 min per IP
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 200, standardHeaders: true, legacyHeaders: false }));

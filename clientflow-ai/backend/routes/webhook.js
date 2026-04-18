@@ -10,7 +10,10 @@ router.get('/', (req, res) => {
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
   if (mode === 'subscribe' && token === process.env.WHATSAPP_VERIFY_TOKEN) {
-    return res.status(200).send(challenge);
+    // Send only the numeric challenge as plain text — avoid XSS
+    const safeChallenge = String(challenge || '').replace(/[^0-9]/g, '');
+    res.setHeader('Content-Type', 'text/plain');
+    return res.status(200).send(safeChallenge);
   }
   res.sendStatus(403);
 });
@@ -198,14 +201,16 @@ async function handlePaymentInstructions(client, to) {
 }
 
 async function handleReview(client, to, rating) {
-  const sentiment = rating >= 4 ? 'positive' : rating === 3 ? 'neutral' : 'negative';
+  // Cap rating to valid range 1–5 regardless of input source
+  const safeRating = Math.min(5, Math.max(1, Math.floor(rating)));
+  const sentiment = safeRating >= 4 ? 'positive' : safeRating === 3 ? 'neutral' : 'negative';
   await db.query(
     `INSERT INTO reviews (client_id, rating, sentiment) VALUES ($1,$2,$3)`,
-    [client.id, rating, sentiment]
+    [client.id, safeRating, sentiment]
   );
-  const stars = '⭐'.repeat(rating);
+  const stars = '⭐'.repeat(safeRating);
   await sendText(to, `${stars} Thank you for your rating! Your feedback means a lot to us. 🙏`);
-  if (rating >= 4) {
+  if (safeRating >= 4) {
     await sendText(to, `We're so glad you had a great experience! Would you like to try any of our other services? Type *pricing* to see options. 🚀`);
   }
 }
@@ -238,7 +243,7 @@ Do not make up prices or services not listed above.`;
   if (!success || !response) {
     await sendText(to, `I'm having a moment — let me connect you with our team right away! 🙏`);
     await db.query(
-      `INSERT INTO alerts (type, client_id, message) VALUES ('ai_failure',$1,'AI failed to respond')`,
+      `INSERT INTO alerts (type, client_id, message) VALUES ('ai_failure',$1,'AI response failed after trying all providers. Check server logs for details.')`,
       [client.id]
     );
     io?.emit('new_alert', { type: 'ai_failure', clientId: client.id });

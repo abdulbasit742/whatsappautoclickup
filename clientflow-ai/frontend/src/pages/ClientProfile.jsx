@@ -192,7 +192,7 @@ export default function ClientProfile() {
               onClick={saveNotes}
               className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
             >
-              {saving ? <XCircle size={14} /> : <CheckCircle size={14} />}
+              {saving ? <XCircle size={14} className="animate-spin" /> : <CheckCircle size={14} />}
               {saving ? 'Saving...' : 'Save Notes'}
             </button>
           </div>

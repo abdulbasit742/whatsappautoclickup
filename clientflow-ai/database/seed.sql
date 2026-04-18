@@ -1,4 +1,7 @@
 -- ClientFlow AI — Seed Data
+-- NOTE: After setup, go to Settings in the dashboard and update your real
+-- business name, WhatsApp number, Easypaisa/JazzCash numbers, and bank details.
+-- The placeholder values below are for demo purposes only.
 
 INSERT INTO services (name, description, price_pkr, delivery_days, category) VALUES
   ('Social Media Management', 'Full management of Instagram, Facebook & TikTok for 1 month', 15000, 30, 'Marketing'),
