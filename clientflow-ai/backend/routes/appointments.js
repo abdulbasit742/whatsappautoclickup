@@ -53,4 +53,35 @@ router.put('/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Available Booking Slots ─────────────────────────────────────────────────
+// Returns 9am–6pm slots every 2 hours for the next 14 days, excluding already booked ones
+router.get('/available-slots', async (req, res) => {
+  try {
+    const booked = (await db.query(
+      `SELECT slot_datetime FROM appointments WHERE status IN ('confirmed','pending') AND slot_datetime > NOW()`
+    )).rows.map(r => new Date(r.slot_datetime).toISOString());
+
+    const bookedSet = new Set(booked);
+    const HOURS = [9, 11, 13, 15, 17]; // 9am, 11am, 1pm, 3pm, 5pm
+    const slots = [];
+    const now = new Date();
+
+    for (let d = 0; d < 14; d++) {
+      const day = new Date(now);
+      day.setDate(now.getDate() + d + 1);
+      for (const h of HOURS) {
+        day.setHours(h, 0, 0, 0);
+        const iso = day.toISOString();
+        if (!bookedSet.has(iso)) {
+          slots.push({
+            datetime: iso,
+            label: day.toLocaleString('en-PK', { weekday: 'long', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true }),
+          });
+        }
+      }
+    }
+    res.json(slots);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;

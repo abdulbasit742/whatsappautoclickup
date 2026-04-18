@@ -88,4 +88,22 @@ After delivering a service, suggest a related next service. No markdown, no aste
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── AI Inline Suggestion for Inbox ─────────────────────────────────────────
+router.post('/suggest', async (req, res) => {
+  try {
+    const { clientId, lastMessages } = req.body;
+    const systemPrompt = `You are a helpful WhatsApp sales assistant. Based on the conversation, suggest ONE short reply (2-3 sentences max) that moves toward a sale or resolves the client's concern. Return ONLY the suggested message text, nothing else.`;
+    const history = (lastMessages || []).map(m => ({
+      role: m.direction === 'inbound' ? 'user' : 'assistant',
+      content: m.content,
+    }));
+    const result = await generateAIResponse({
+      systemPrompt,
+      conversationHistory: history,
+      userMessage: 'Suggest the best next reply',
+    });
+    res.json({ suggestion: result.response });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;

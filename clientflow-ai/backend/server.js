@@ -102,6 +102,9 @@ app.post('/api/upload',
   }
 );
 
+// ─── Health Check ────────────────────────────────────────────────────────────────
+app.get('/api/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime() }));
+
 // ─── Routes ─────────────────────────────────────────────────────────────────────
 const webhookRouter     = require('./routes/webhook');
 const authRouter        = require('./routes/auth');
