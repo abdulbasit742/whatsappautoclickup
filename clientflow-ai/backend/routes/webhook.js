@@ -315,8 +315,10 @@ async function handleReview(client, to, rating) {
     `INSERT INTO reviews (client_id, rating, sentiment) VALUES ($1,$2,$3)`,
     [client.id, rating, sentiment]
   );
+  // Static lookup avoids user-controlled string repetition (CodeQL resource-exhaustion)
+  const STAR_MAP = ['', '⭐', '⭐⭐', '⭐⭐⭐', '⭐⭐⭐⭐', '⭐⭐⭐⭐⭐'];
   const safeRating = Math.min(Math.max(1, rating), 5);
-  const stars = '⭐'.repeat(safeRating);
+  const stars = STAR_MAP[safeRating];
 
   if (rating <= 2) {
     await sendText(to,
