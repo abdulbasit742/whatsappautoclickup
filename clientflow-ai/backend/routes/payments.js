@@ -64,6 +64,26 @@ router.put('/:id/confirm', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+router.put('/:id/reject', async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const r = await db.query(
+      `UPDATE payments SET status='rejected', notes=COALESCE($1, notes) WHERE id=$2 RETURNING *`,
+      [reason, req.params.id]
+    );
+    const pay = r.rows[0];
+    if (pay) {
+      const client = (await db.query(`SELECT whatsapp_number, name FROM clients WHERE id=$1`, [pay.client_id])).rows[0];
+      if (client) {
+        await sendText(client.whatsapp_number,
+          `❌ We could not verify your payment${reason ? `: ${reason}` : ''}. Please resend the screenshot or contact us. We are happy to help! 😊`
+        );
+      }
+    }
+    res.json(pay);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.get('/revenue', async (req, res) => {
   try {
     const r = await db.query(

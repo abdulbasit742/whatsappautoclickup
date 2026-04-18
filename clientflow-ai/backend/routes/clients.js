@@ -62,4 +62,29 @@ router.post('/:id/send', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+router.delete('/:id', async (req, res) => {
+  try {
+    await db.query(`UPDATE clients SET status='blocked' WHERE id=$1`, [req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/export/csv', async (req, res) => {
+  try {
+    const r = await db.query(
+      `SELECT c.whatsapp_number, c.name, c.email, c.status, c.total_spent_pkr,
+              c.first_contact_at, c.last_active_at, c.referral_code
+       FROM clients c ORDER BY c.created_at DESC`
+    );
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="clients.csv"');
+    const header = 'whatsapp_number,name,email,status,total_spent_pkr,first_contact,last_active,referral_code\n';
+    const rows = r.rows.map(c =>
+      [c.whatsapp_number, c.name || '', c.email || '', c.status, c.total_spent_pkr,
+       c.first_contact_at, c.last_active_at, c.referral_code || ''].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+    ).join('\n');
+    res.send(header + rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;

@@ -1,5 +1,6 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import AlertBell from './AlertBell';
 import {
   LayoutDashboard, Users, MessageSquare, CreditCard, BarChart2,
   Star, Megaphone, Package, FileText, Calendar, Link, Settings, LogOut, Zap, Clock
@@ -23,11 +24,15 @@ const links = [
 
 export default function Sidebar() {
   const { logout } = useAuth();
+  const navigate = useNavigate();
   return (
     <aside className="w-56 bg-[#1a1a1a] border-r border-[#2a2a2a] flex flex-col h-full shrink-0">
       <div className="flex items-center gap-2 p-4 border-b border-[#2a2a2a]">
         <Zap size={20} className="text-emerald-400" />
-        <span className="font-bold text-emerald-400">ClientFlow AI</span>
+        <span className="font-bold text-emerald-400 flex-1">ClientFlow AI</span>
+        <button onClick={() => navigate('/')} title="Alerts">
+          <AlertBell />
+        </button>
       </div>
       <nav className="flex-1 overflow-y-auto py-2">
         {links.map(({ to, icon: Icon, label }) => (

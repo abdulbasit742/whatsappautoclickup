@@ -65,4 +65,32 @@ router.get('/funnel', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+router.get('/top-clients', async (req, res) => {
+  try {
+    const r = await db.query(
+      `SELECT c.id, c.name, c.whatsapp_number, c.total_spent_pkr, c.status,
+       COUNT(p.id) as order_count
+       FROM clients c
+       LEFT JOIN payments p ON p.client_id=c.id AND p.status='confirmed'
+       GROUP BY c.id ORDER BY c.total_spent_pkr DESC LIMIT 10`
+    );
+    res.json(r.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/retention', async (req, res) => {
+  try {
+    const r = await db.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE total_spent_pkr = 0)            as never_paid,
+         COUNT(*) FILTER (WHERE total_spent_pkr > 0 AND
+           (SELECT COUNT(*) FROM payments WHERE client_id=clients.id AND status='confirmed') = 1) as one_time,
+         COUNT(*) FILTER (WHERE
+           (SELECT COUNT(*) FROM payments WHERE client_id=clients.id AND status='confirmed') > 1) as repeat
+       FROM clients`
+    );
+    res.json(r.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle, Clock, TrendingUp, DollarSign, X, Eye } from 'lucide-react';
+import { CheckCircle, Clock, TrendingUp, DollarSign, X, Eye, XCircle, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import api from '../utils/api';
+import { useToast } from '../components/Toast';
 
 const METHOD_COLORS = {
   easypaisa: 'bg-green-500/20 text-green-400',
@@ -13,9 +14,12 @@ export default function Payments() {
   const [payments, setPayments]   = useState([]);
   const [filter, setFilter]       = useState('all');
   const [preview, setPreview]     = useState(null);
+  const [rejectModal, setRejectModal] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
   const [stats, setStats]         = useState({ total: 0, confirmed: 0, pending: 0, revenue: 0 });
+  const toast = useToast();
 
-  useEffect(() => {
+  const reload = () =>
     api.get('/payments').then(r => {
       setPayments(r.data);
       const confirmed = r.data.filter(p => p.status === 'confirmed');
@@ -26,19 +30,42 @@ export default function Payments() {
         revenue:   confirmed.reduce((sum, p) => sum + parseFloat(p.amount_pkr || 0), 0),
       });
     });
-  }, []);
+
+  useEffect(() => { reload(); }, []);
 
   const confirm = async id => {
-    await api.put(`/payments/${id}/confirm`);
-    setPayments(p => p.map(x => x.id === id ? { ...x, status: 'confirmed' } : x));
-    setStats(s => ({ ...s, confirmed: s.confirmed + 1, pending: s.pending - 1 }));
+    try {
+      await api.put(`/payments/${id}/confirm`);
+      toast('Payment confirmed! Client has been notified.', 'success');
+      reload();
+      if (preview?.id === id) setPreview(null);
+    } catch (e) { toast('Failed: ' + (e.response?.data?.error || e.message), 'error'); }
+  };
+
+  const reject = async () => {
+    if (!rejectModal) return;
+    try {
+      await api.put(`/payments/${rejectModal.id}/reject`, { reason: rejectReason });
+      toast('Payment rejected. Client has been notified.', 'warning');
+      setRejectModal(null);
+      setRejectReason('');
+      reload();
+    } catch (e) { toast('Failed: ' + (e.response?.data?.error || e.message), 'error'); }
   };
 
   const filtered = payments.filter(p => filter === 'all' ? true : p.status === filter);
 
   return (
     <div>
-      <h2 className="text-xl font-bold mb-6 text-white">Payments</h2>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-bold text-white">Payments</h2>
+        <a
+          href="/api/clients/export/csv"
+          className="flex items-center gap-2 text-gray-400 hover:text-white border border-[#2a2a2a] px-3 py-1.5 rounded-lg text-sm transition-colors"
+        >
+          <Download size={14} /> Export Clients
+        </a>
+      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -62,7 +89,7 @@ export default function Payments() {
 
       {/* Filter Tabs */}
       <div className="flex gap-2 mb-4">
-        {['all', 'pending', 'confirmed'].map(f => (
+        {['all', 'pending', 'confirmed', 'rejected'].map(f => (
           <button
             key={f}
             onClick={() => setFilter(f)}
@@ -96,7 +123,11 @@ export default function Payments() {
                   <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${METHOD_COLORS[p.method] || 'bg-gray-500/20 text-gray-400'}`}>{p.method}</span>
                 </td>
                 <td className="px-4 py-3">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${p.status === 'confirmed' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                    p.status === 'confirmed' ? 'bg-emerald-500/20 text-emerald-400' :
+                    p.status === 'rejected'  ? 'bg-red-500/20 text-red-400' :
+                    'bg-yellow-500/20 text-yellow-400'
+                  }`}>
                     {p.status}
                   </span>
                 </td>
@@ -109,9 +140,14 @@ export default function Payments() {
                       </button>
                     )}
                     {p.status === 'pending' && (
-                      <button onClick={() => confirm(p.id)} className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300">
-                        <CheckCircle size={12}/> Confirm
-                      </button>
+                      <>
+                        <button onClick={() => confirm(p.id)} className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300">
+                          <CheckCircle size={12}/> Confirm
+                        </button>
+                        <button onClick={() => { setRejectModal(p); setRejectReason(''); }} className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300">
+                          <XCircle size={12}/> Reject
+                        </button>
+                      </>
                     )}
                   </div>
                 </td>
@@ -136,11 +172,42 @@ export default function Payments() {
               <div className="flex justify-between"><span className="text-gray-400">Method</span><span className="text-white capitalize">{preview.method}</span></div>
             </div>
             {preview.status === 'pending' && (
-              <button onClick={() => { confirm(preview.id); setPreview(null); }}
-                className="w-full mt-4 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white py-2 rounded-lg text-sm font-medium">
-                <CheckCircle size={14}/> Confirm Payment
-              </button>
+              <div className="flex gap-2 mt-4">
+                <button onClick={() => { setRejectModal(preview); setPreview(null); setRejectReason(''); }}
+                  className="flex-1 flex items-center justify-center gap-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 py-2 rounded-lg text-sm font-medium">
+                  <XCircle size={14}/> Reject
+                </button>
+                <button onClick={() => { confirm(preview.id); setPreview(null); }}
+                  className="flex-1 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white py-2 rounded-lg text-sm font-medium">
+                  <CheckCircle size={14}/> Confirm
+                </button>
+              </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Reject Modal */}
+      {rejectModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-white">Reject Payment</h3>
+              <button onClick={() => setRejectModal(null)} className="text-gray-500 hover:text-white"><X size={18}/></button>
+            </div>
+            <p className="text-xs text-gray-400 mb-3">Client: <span className="text-white">{rejectModal.name || rejectModal.whatsapp_number}</span> — PKR {Number(rejectModal.amount_pkr).toLocaleString()}</p>
+            <label className="block text-xs text-gray-400 mb-1">Reason (optional — will be sent to client)</label>
+            <textarea
+              value={rejectReason}
+              onChange={e => setRejectReason(e.target.value)}
+              rows={3}
+              placeholder="e.g. Screenshot unclear, wrong amount..."
+              className="w-full bg-[#0f0f0f] border border-[#2a2a2a] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500 resize-none"
+            />
+            <div className="flex gap-3 mt-4">
+              <button onClick={() => setRejectModal(null)} className="flex-1 bg-[#2a2a2a] text-gray-300 py-2 rounded-lg text-sm">Cancel</button>
+              <button onClick={reject} className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2 rounded-lg text-sm font-medium">Reject Payment</button>
+            </div>
           </div>
         </div>
       )}

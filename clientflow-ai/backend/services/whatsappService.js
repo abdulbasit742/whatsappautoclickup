@@ -36,6 +36,45 @@ async function sendTemplate(to, templateName, langCode = 'en', components = []) 
   }
 }
 
+async function sendImage(to, imageUrl, caption = '') {
+  try {
+    const res = await axios.post(BASE_URL, {
+      messaging_product: 'whatsapp',
+      to,
+      type: 'image',
+      image: { link: imageUrl, caption },
+    }, { headers: HEADERS });
+    return res.data;
+  } catch (err) {
+    console.error('[WA] sendImage error:', err?.response?.data || err.message);
+    throw err;
+  }
+}
+
+async function sendInteractiveButtons(to, bodyText, buttons) {
+  try {
+    const res = await axios.post(BASE_URL, {
+      messaging_product: 'whatsapp',
+      to,
+      type: 'interactive',
+      interactive: {
+        type: 'button',
+        body: { text: bodyText },
+        action: {
+          buttons: buttons.map((b, i) => ({
+            type: 'reply',
+            reply: { id: `btn_${i}`, title: b }
+          }))
+        }
+      }
+    }, { headers: HEADERS });
+    return res.data;
+  } catch (err) {
+    console.error('[WA] sendInteractiveButtons error:', err?.response?.data || err.message);
+    throw err;
+  }
+}
+
 async function markAsRead(messageId) {
   try {
     await axios.post(BASE_URL, {
@@ -48,4 +87,4 @@ async function markAsRead(messageId) {
   }
 }
 
-module.exports = { sendText, sendTemplate, markAsRead };
+module.exports = { sendText, sendTemplate, sendImage, sendInteractiveButtons, markAsRead };

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { generateAIResponse } = require('../services/aiService');
-const { sendText } = require('../services/whatsappService');
+const { sendText, markAsRead } = require('../services/whatsappService');
 
 // ─── Webhook Verification ────────────────────────────────────────────────────────
 router.get('/', (req, res) => {
@@ -46,9 +46,13 @@ router.post('/', async (req, res) => {
       const msgId = msg.id;
       const msgType = msg.type;
       let content = '';
+      let isPaymentScreenshot = false;
 
       if (msgType === 'text') content = msg.text.body;
-      else if (msgType === 'image') content = '[Image received]';
+      else if (msgType === 'image') {
+        content = '[Image received]';
+        isPaymentScreenshot = true;
+      }
       else if (msgType === 'audio') content = '[Voice message received]';
       else if (msgType === 'document') content = `[Document: ${msg.document?.filename || 'file'}]`;
       else content = `[${msgType}]`;
@@ -79,11 +83,17 @@ router.post('/', async (req, res) => {
 
       await db.query(`UPDATE clients SET last_active_at=NOW() WHERE id=$1`, [client.id]);
 
+      // Mark message as read
+      markAsRead(msgId).catch(() => {});
+
+      const autoReply = await db.query(`SELECT value FROM settings WHERE key='auto_reply_enabled'`);
+      if (autoReply.rows[0]?.value !== 'true') continue;
+
+      // Check if client is blocked
+      if (client.status === 'blocked') continue;
+
       const workStart = await db.query(`SELECT value FROM settings WHERE key='working_hours_start'`);
       const workEnd = await db.query(`SELECT value FROM settings WHERE key='working_hours_end'`);
-      const autoReply = await db.query(`SELECT value FROM settings WHERE key='auto_reply_enabled'`);
-
-      if (autoReply.rows[0]?.value !== 'true') continue;
 
       const now = new Date();
       const hour = now.getHours();
@@ -93,6 +103,25 @@ router.post('/', async (req, res) => {
       if (hour < sh || hour >= eh) {
         const offlineMsg = await db.query(`SELECT value FROM settings WHERE key='offline_message'`);
         await sendText(from, offlineMsg.rows[0]?.value || 'We are currently offline. We will reply soon!');
+        continue;
+      }
+
+      // Image received — treat as potential payment screenshot
+      if (isPaymentScreenshot) {
+        const pendingPayment = await db.query(
+          `SELECT * FROM payments WHERE client_id=$1 AND status='pending' ORDER BY created_at DESC LIMIT 1`,
+          [client.id]
+        );
+        if (pendingPayment.rows.length > 0) {
+          await db.query(
+            `INSERT INTO alerts (type, client_id, message) VALUES ('pending_payment',$1,'Client sent a payment screenshot — please review and confirm')`,
+            [client.id]
+          );
+          req.app.get('io')?.emit('new_alert', { type: 'pending_payment', clientId: client.id });
+          await sendText(from, `📸 Got your screenshot! Our team will review and confirm your payment shortly. Thank you for your patience! 🙏`);
+        } else {
+          await sendText(from, `📸 Thanks for sharing! If this is a payment screenshot, please first tell us which service you'd like to order. Type *pricing* to see options. 😊`);
+        }
         continue;
       }
 
@@ -135,9 +164,10 @@ async function handleOnboarding(client, to, isNew) {
 
   await sendText(to, greeting);
   if (isNew) {
+    const coldLeadHours = (await db.query(`SELECT value FROM settings WHERE key='follow_up_cold_lead_hours'`)).rows[0]?.value || '24';
     await db.query(
-      `INSERT INTO follow_ups (client_id, type, scheduled_at) VALUES ($1,'cold_lead', NOW() + INTERVAL '24 hours')`,
-      [client.id]
+      `INSERT INTO follow_ups (client_id, type, scheduled_at) VALUES ($1,'cold_lead', NOW() + ($2 || ' hours')::INTERVAL)`,
+      [client.id, coldLeadHours]
     );
   }
 }
@@ -160,9 +190,10 @@ async function handlePaymentInstructions(client, to) {
   const msg = `💳 *Payment Details*\n\n💚 *Easypaisa:* ${easy || 'Not set'}\n💙 *JazzCash:* ${jazz || 'Not set'}\n🏦 *Bank:* ${bank || 'Contact for details'}\n\nAfter sending payment, please share a screenshot here. We'll confirm within a few minutes! ✅`;
   await sendText(to, msg);
 
+  const paymentHours = (await db.query(`SELECT value FROM settings WHERE key='follow_up_payment_hours'`)).rows[0]?.value || '24';
   await db.query(
-    `INSERT INTO follow_ups (client_id, type, scheduled_at) VALUES ($1,'pending_payment', NOW() + INTERVAL '24 hours')`,
-    [client.id]
+    `INSERT INTO follow_ups (client_id, type, scheduled_at) VALUES ($1,'pending_payment', NOW() + ($2 || ' hours')::INTERVAL)`,
+    [client.id, paymentHours]
   );
 }
 

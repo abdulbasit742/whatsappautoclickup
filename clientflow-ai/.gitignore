@@ -1,7 +1,33 @@
+# Dependencies
 node_modules/
-.env
+**/node_modules/
+
+# Build outputs
 dist/
 build/
-.DS_Store
+
+# Environment files
+.env
+.env.local
+.env.*.local
+backend/.env
+
+# Uploads (keep .gitkeep only)
+uploads/*
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Logs
 *.log
-uploads/
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Misc
+*.zip

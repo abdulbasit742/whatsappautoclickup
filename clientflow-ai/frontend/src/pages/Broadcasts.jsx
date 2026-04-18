@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Send, Plus, Sparkles, X, Users, Clock } from 'lucide-react';
+import { Send, Plus, Sparkles, X, Users, Clock, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import api from '../utils/api';
+import { useToast } from '../components/Toast';
 
 const AUDIENCE_LABELS = { all: 'All Clients', paid: 'Paid Only', inactive: 'Inactive', leads: 'Leads' };
 const STATUS_COLORS = {
@@ -21,6 +22,7 @@ export default function Broadcasts() {
   const [aiTone, setAiTone]         = useState('friendly');
   const [showAi, setShowAi]         = useState(false);
   const [preview, setPreview]       = useState(null);
+  const toast = useToast();
 
   useEffect(() => { api.get('/broadcasts').then(r => setBroadcasts(r.data)); }, []);
 
@@ -31,25 +33,38 @@ export default function Broadcasts() {
       const r = await api.post('/ai/write-broadcast', { topic: aiTopic, tone: aiTone, audience: form.target_audience });
       setForm(f => ({ ...f, message: r.data.message }));
       setShowAi(false);
-    } catch (e) { alert('AI error: ' + (e.response?.data?.error || e.message)); }
+    } catch (e) { toast('AI error: ' + (e.response?.data?.error || e.message), 'error'); }
     finally { setAiLoading(false); }
   };
 
   const create = async () => {
-    if (!form.title.trim() || !form.message.trim()) return alert('Title and message required');
-    const r = await api.post('/broadcasts', form);
-    setBroadcasts(b => [r.data, ...b]);
-    setForm(emptyForm); setModal(false);
+    if (!form.title.trim() || !form.message.trim()) { toast('Title and message required', 'warning'); return; }
+    try {
+      const r = await api.post('/broadcasts', form);
+      setBroadcasts(b => [r.data, ...b]);
+      setForm(emptyForm); setModal(false);
+      toast('Broadcast created!', 'success');
+    } catch (e) { toast('Failed: ' + (e.response?.data?.error || e.message), 'error'); }
   };
 
   const sendNow = async id => {
-    if (!confirm('Send this broadcast to all selected clients?')) return;
+    if (!window.confirm('Send this broadcast to all selected clients?')) return;
     setSending(id);
     try {
       const r = await api.post(`/broadcasts/${id}/send`);
       setBroadcasts(b => b.map(x => x.id === id ? { ...x, status: 'sent', total_sent: r.data.sent } : x));
-    } catch (e) { alert('Failed: ' + (e.response?.data?.error || e.message)); }
+      toast(`Broadcast sent to ${r.data.sent} clients!`, 'success');
+    } catch (e) { toast('Failed: ' + (e.response?.data?.error || e.message), 'error'); }
     finally { setSending(null); }
+  };
+
+  const deleteBroadcast = async (id) => {
+    if (!window.confirm('Delete this draft broadcast?')) return;
+    try {
+      await api.delete(`/broadcasts/${id}`);
+      setBroadcasts(b => b.filter(x => x.id !== id));
+      toast('Broadcast deleted.', 'info');
+    } catch (e) { toast('Failed: ' + (e.response?.data?.error || e.message), 'error'); }
   };
 
   return (
@@ -96,10 +111,16 @@ export default function Broadcasts() {
               <div className="flex gap-2 ml-4 shrink-0">
                 <button onClick={() => setPreview(b)} className="text-xs text-gray-400 hover:text-white border border-[#2a2a2a] px-3 py-1.5 rounded-lg transition-colors">Preview</button>
                 {(b.status === 'draft' || b.status === 'scheduled') && (
-                  <button onClick={() => sendNow(b.id)} disabled={sending === b.id}
-                    className="flex items-center gap-1 text-xs bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors">
-                    <Send size={11}/> {sending === b.id ? 'Sending...' : 'Send Now'}
-                  </button>
+                  <>
+                    <button onClick={() => sendNow(b.id)} disabled={sending === b.id}
+                      className="flex items-center gap-1 text-xs bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors">
+                      <Send size={11}/> {sending === b.id ? 'Sending...' : 'Send Now'}
+                    </button>
+                    <button onClick={() => deleteBroadcast(b.id)}
+                      className="text-gray-600 hover:text-red-400 border border-[#2a2a2a] p-1.5 rounded-lg transition-colors">
+                      <Trash2 size={13}/>
+                    </button>
+                  </>
                 )}
               </div>
             </div>

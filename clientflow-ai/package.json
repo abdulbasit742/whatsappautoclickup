@@ -1,0 +1,21 @@
+{
+  "name": "clientflow-ai",
+  "version": "1.0.0",
+  "description": "ClientFlow AI — WhatsApp Business Automation Platform",
+  "private": true,
+  "scripts": {
+    "install:all": "cd backend && npm install && cd ../frontend && npm install",
+    "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm run dev\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "start": "cd backend && npm start",
+    "setup:db": "psql -U postgres -c \"CREATE DATABASE clientflow;\" && psql -U postgres -d clientflow -f database/schema.sql && psql -U postgres -d clientflow -f database/seed.sql",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

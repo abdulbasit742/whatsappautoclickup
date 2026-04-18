@@ -8,7 +8,10 @@ const ALERT_COLORS = {
   unresolved_query: 'bg-yellow-500/20 text-yellow-400',
   pending_payment:  'bg-blue-500/20 text-blue-400',
   new_client:       'bg-emerald-500/20 text-emerald-400',
-  ai_error:         'bg-red-500/20 text-red-400',
+  ai_failure:       'bg-red-500/20 text-red-400',
+  complaint:        'bg-orange-500/20 text-orange-400',
+  inactive_client:  'bg-gray-500/20 text-gray-400',
+  new_review:       'bg-purple-500/20 text-purple-400',
 };
 
 export default function Dashboard() {

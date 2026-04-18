@@ -56,4 +56,23 @@ router.post('/:id/send', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+router.put('/:id', async (req, res) => {
+  try {
+    const { title, message, target_audience, scheduled_at } = req.body;
+    const r = await db.query(
+      `UPDATE broadcasts SET title=$1,message=$2,target_audience=$3,scheduled_at=$4 WHERE id=$5 AND status='draft' RETURNING *`,
+      [title, message, target_audience, scheduled_at, req.params.id]
+    );
+    if (!r.rows[0]) return res.status(404).json({ error: 'Not found or already sent' });
+    res.json(r.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete('/:id', async (req, res) => {
+  try {
+    await db.query(`DELETE FROM broadcasts WHERE id=$1 AND status='draft'`, [req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;

@@ -4,6 +4,8 @@ const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
 const multer = require('multer');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const server = http.createServer(app);
@@ -13,13 +15,23 @@ const io = new Server(server, {
 
 app.set('io', io);
 
+// ─── Security ────────────────────────────────────────────────────────────────────
+app.use(helmet({ contentSecurityPolicy: false }));
+
+// General rate limit: 200 req / 15 min per IP
+app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 200, standardHeaders: true, legacyHeaders: false }));
+
+// Stricter limit on auth route
+app.use('/api/auth/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 10 }));
+
 // ─── Middleware ──────────────────────────────────────────────────────────────────
 app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({ dest: 'uploads/', limits: { fileSize: 10 * 1024 * 1024 } });
 app.post('/api/upload', upload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   res.json({ url: `/uploads/${req.file.filename}` });
 });
 
@@ -55,6 +67,9 @@ app.use('/api/analytics',    analyticsRouter);
 app.use('/api/settings',     settingsRouter);
 app.use('/api/followups',    followupRouter);
 app.use('/api/ai',           aiRouter);
+
+// ─── Health Check ────────────────────────────────────────────────────────────────
+app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
 // ─── Socket.io ───────────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
