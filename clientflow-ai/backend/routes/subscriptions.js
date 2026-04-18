@@ -4,8 +4,6 @@ const db = require('../db');
 const auth = require('../middleware/auth');
 const rateLimit = require('express-rate-limit');
 
-router.use(auth);
-
 const subRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 30,
@@ -15,6 +13,7 @@ const subRateLimit = rateLimit({
 });
 
 router.use(subRateLimit);
+router.use(auth);
 
 // ─── Helper ─────────────────────────────────────────────────────────────────────
 function periodEnd(billingCycle) {
