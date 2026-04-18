@@ -181,8 +181,9 @@ router.post('/', async (req, res) => {
       // ─── Payment screenshot / confirmation detection ───────────────────────
       const paymentConfirmKeywords = [
         'paid', 'payment done', 'payment sent', 'sent payment', 'transferred',
-        'bhej diya', 'bheja', 'kar diya', 'ho gaya', 'done', 'screenshot',
+        'bhej diya', 'bheja', 'kar diya', 'ho gaya', 'screenshot',
         'paisa bheja', 'deposit', 'transaction', 'proof',
+        'send kar diya', 'payment kar di',
       ];
       const isPaymentConfirmation = paymentConfirmKeywords.some(k => lc.includes(k));
 

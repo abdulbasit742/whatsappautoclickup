@@ -141,6 +141,12 @@ router.put('/:id/reject', async (req, res) => {
         pay.client_id
       ).catch(() => {});
     }
+    // Resolve pending_payment alerts so the admin dashboard stays clean
+    await db.query(
+      `UPDATE alerts SET is_resolved=true, resolved_at=NOW()
+       WHERE client_id=$1 AND type='pending_payment' AND is_resolved=false`,
+      [pay.client_id]
+    );
     res.json(pay);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

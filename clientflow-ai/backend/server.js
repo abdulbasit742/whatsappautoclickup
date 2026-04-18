@@ -1,7 +1,11 @@
 require('dotenv').config();
 
 // ─── Startup Environment Validation ─────────────────────────────────────────────
-const REQUIRED_ENV = ['DATABASE_URL', 'JWT_SECRET', 'OWNER_EMAIL', 'OWNER_PASSWORD', 'FRONTEND_URL'];
+const REQUIRED_ENV = [
+  'DATABASE_URL', 'JWT_SECRET', 'OWNER_EMAIL', 'OWNER_PASSWORD',
+  'WHATSAPP_TOKEN', 'WHATSAPP_PHONE_ID', 'WHATSAPP_VERIFY_TOKEN',
+  'ANTHROPIC_API_KEY', 'FRONTEND_URL',
+];
 const missing = REQUIRED_ENV.filter(k => !process.env[k]);
 if (missing.length) {
   console.error(`[Startup] Missing required environment variables: ${missing.join(', ')}`);
