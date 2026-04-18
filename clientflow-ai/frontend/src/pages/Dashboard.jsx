@@ -3,6 +3,7 @@ import { io } from 'socket.io-client';
 import { Users, TrendingUp, Star, AlertTriangle, Send, X, Activity, Flame, DollarSign, Target } from 'lucide-react';
 import api from '../utils/api';
 import StatCard from '../components/StatCard';
+import { useToast } from '../components/Toast';
 
 const ALERT_COLORS = {
   unresolved_query: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/20',
@@ -20,6 +21,7 @@ const PRIORITY_BADGE = {
 };
 
 export default function Dashboard() {
+  const toast = useToast();
   const [stats, setStats]           = useState({});
   const [alerts, setAlerts]         = useState([]);
   const [funnel, setFunnel]         = useState(null);
@@ -69,7 +71,7 @@ export default function Dashboard() {
       setReplyAlert(null);
       setReplyMsg('');
     } catch (e) {
-      alert('Failed: ' + (e.response?.data?.error || e.message));
+      toast('Failed: ' + (e.response?.data?.error || e.message), 'error');
     } finally { setSending(false); }
   };
 
