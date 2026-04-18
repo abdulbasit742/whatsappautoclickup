@@ -2,8 +2,19 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
+const rateLimit = require('express-rate-limit');
 
 router.use(auth);
+
+const subRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+});
+
+router.use(subRateLimit);
 
 // ─── Helper ─────────────────────────────────────────────────────────────────────
 function periodEnd(billingCycle) {

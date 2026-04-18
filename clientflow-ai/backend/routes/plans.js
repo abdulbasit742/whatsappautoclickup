@@ -1,6 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const rateLimit = require('express-rate-limit');
+
+const plansRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+});
+
+router.use(plansRateLimit);
 
 // Public — no auth required
 router.get('/', async (req, res) => {
