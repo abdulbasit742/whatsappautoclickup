@@ -40,10 +40,23 @@ router.get('/:id/messages', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { name, email, notes, status } = req.body;
+    // Only update fields that were explicitly provided (COALESCE prevents wiping existing data)
     const r = await db.query(
-      `UPDATE clients SET name=$1,email=$2,notes=$3,status=$4 WHERE id=$5 RETURNING *`,
-      [name, email, notes, status, req.params.id]
+      `UPDATE clients
+       SET name    = COALESCE($1, name),
+           email   = COALESCE($2, email),
+           notes   = COALESCE($3, notes),
+           status  = COALESCE($4, status)
+       WHERE id=$5 RETURNING *`,
+      [
+        name !== undefined ? name : null,
+        email !== undefined ? email : null,
+        notes !== undefined ? notes : null,
+        status !== undefined ? status : null,
+        req.params.id,
+      ]
     );
+    if (!r.rows[0]) return res.status(404).json({ error: 'Client not found' });
     res.json(r.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -51,13 +64,11 @@ router.put('/:id', async (req, res) => {
 router.post('/:id/send', async (req, res) => {
   try {
     const { message } = req.body;
-    const client = (await db.query(`SELECT whatsapp_number FROM clients WHERE id=$1`, [req.params.id])).rows[0];
+    if (!message?.trim()) return res.status(400).json({ error: 'Message is required' });
+    const client = (await db.query(`SELECT id, whatsapp_number FROM clients WHERE id=$1`, [req.params.id])).rows[0];
     if (!client) return res.status(404).json({ error: 'Client not found' });
-    await sendText(client.whatsapp_number, message);
-    await db.query(
-      `INSERT INTO messages (client_id, direction, content) VALUES ($1,'outbound',$2)`,
-      [req.params.id, message]
-    );
+    // Pass clientId so whatsappService logs the outbound WA message ID
+    await sendText(client.whatsapp_number, message, client.id);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

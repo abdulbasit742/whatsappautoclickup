@@ -51,9 +51,13 @@ export default function Dashboard() {
   }, [refresh]);
 
   const resolveAlert = async id => {
-    await api.put(`/alerts/${id}/resolve`);
-    setAlerts(a => a.filter(x => x.id !== id));
-    setStats(s => ({ ...s, unresolvedAlerts: Math.max(0, (s.unresolvedAlerts || 1) - 1) }));
+    try {
+      await api.put(`/alerts/${id}/resolve`);
+      setAlerts(a => a.filter(x => x.id !== id));
+      setStats(s => ({ ...s, unresolvedAlerts: Math.max(0, (s.unresolvedAlerts || 1) - 1) }));
+    } catch (e) {
+      console.error('Failed to resolve alert:', e.message);
+    }
   };
 
   const sendQuickReply = async () => {

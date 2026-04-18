@@ -39,38 +39,54 @@ router.post('/', async (req, res) => {
 });
 
 router.put('/:id/confirm', async (req, res) => {
+  const dbClient = await require('../db').pool.connect();
   try {
-    const r = await db.query(
+    await dbClient.query('BEGIN');
+
+    const r = await dbClient.query(
       `UPDATE payments SET status='confirmed', confirmed_at=NOW() WHERE id=$1 AND status='pending' RETURNING *`,
       [req.params.id]
     );
-    if (!r.rows.length) return res.status(404).json({ error: 'Payment not found or already confirmed' });
+    if (!r.rows.length) {
+      await dbClient.query('ROLLBACK');
+      return res.status(404).json({ error: 'Payment not found or already confirmed' });
+    }
 
     const pay = r.rows[0];
 
     // Update client total and status
-    await db.query(
+    await dbClient.query(
       `UPDATE clients SET total_spent_pkr = total_spent_pkr + $1, status='paid' WHERE id=$2`,
       [pay.amount_pkr, pay.client_id]
     );
 
-    const client = (await db.query(`SELECT whatsapp_number, name FROM clients WHERE id=$1`, [pay.client_id])).rows[0];
-    const name = client?.name || 'valued client';
+    // Fetch client inside the transaction for consistency
+    const clientRow = (await dbClient.query(
+      `SELECT whatsapp_number, name FROM clients WHERE id=$1`, [pay.client_id]
+    )).rows[0];
+
+    await dbClient.query('COMMIT');
+
+    if (!clientRow) {
+      console.warn(`[Payments] Client ${pay.client_id} not found after confirming payment ${pay.id}`);
+      return res.json(pay);
+    }
+    const name = clientRow.name || 'valued client';
 
     // Send payment confirmation to client
-    await sendText(client.whatsapp_number,
+    await sendText(clientRow.whatsapp_number,
       `✅ *Payment Confirmed!*\n\nThank you, ${name}! Your payment of PKR ${Number(pay.amount_pkr).toLocaleString()} has been received.\n\n🚀 Your service is now being processed. We'll send you updates here. Stay tuned!`,
       pay.client_id
-    );
+    ).catch(() => {});
 
     // Send service/account details if available in settings
     const serviceDetailsRow = await db.query(`SELECT value FROM settings WHERE key='service_delivery_message'`);
     const serviceDetails = serviceDetailsRow.rows[0]?.value;
     if (serviceDetails) {
-      await sendText(client.whatsapp_number,
+      await sendText(clientRow.whatsapp_number,
         serviceDetails.replace(/\{\{name\}\}/g, name),
         pay.client_id
-      );
+      ).catch(() => {});
     }
 
     // Resolve any pending_payment alerts for this client
@@ -97,12 +113,17 @@ router.put('/:id/confirm', async (req, res) => {
     const ownerNum = ownerRow.rows[0]?.value;
     if (ownerNum) {
       await sendText(ownerNum,
-        `💰 *Payment Confirmed!*\n\nClient: ${name} (${client.whatsapp_number})\nAmount: PKR ${Number(pay.amount_pkr).toLocaleString()}\nMethod: ${pay.method || 'N/A'}\n\nService delivery initiated. ✅`
+        `💰 *Payment Confirmed!*\n\nClient: ${name} (${clientRow.whatsapp_number})\nAmount: PKR ${Number(pay.amount_pkr).toLocaleString()}\nMethod: ${pay.method || 'N/A'}\n\nService delivery initiated. ✅`
       ).catch(() => {});
     }
 
     res.json(pay);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    await dbClient.query('ROLLBACK').catch(() => {});
+    res.status(500).json({ error: err.message });
+  } finally {
+    dbClient.release();
+  }
 });
 
 router.put('/:id/reject', async (req, res) => {
@@ -113,12 +134,12 @@ router.put('/:id/reject', async (req, res) => {
     );
     if (!r.rows.length) return res.status(404).json({ error: 'Payment not found or already processed' });
     const pay = r.rows[0];
-    const client = (await db.query(`SELECT whatsapp_number, name FROM clients WHERE id=$1`, [pay.client_id])).rows[0];
-    if (client) {
-      await sendText(client.whatsapp_number,
+    const clientRow = (await db.query(`SELECT whatsapp_number, name FROM clients WHERE id=$1`, [pay.client_id])).rows[0];
+    if (clientRow) {
+      await sendText(clientRow.whatsapp_number,
         `⚠️ We could not verify your payment. Please resend the screenshot or contact us for assistance. We're here to help! 🙏`,
         pay.client_id
-      );
+      ).catch(() => {});
     }
     res.json(pay);
   } catch (err) { res.status(500).json({ error: err.message }); }

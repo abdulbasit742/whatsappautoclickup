@@ -4,10 +4,10 @@ const db = require('../db');
 const PROVIDERS = ['claude', 'openai', 'gemini', 'groq'];
 
 const providerHealth = {
-  claude: { available: true, lastError: null },
-  openai: { available: true, lastError: null },
-  gemini: { available: true, lastError: null },
-  groq:   { available: true, lastError: null },
+  claude: { available: true, lastError: null, cooldownTimer: null },
+  openai: { available: true, lastError: null, cooldownTimer: null },
+  gemini: { available: true, lastError: null, cooldownTimer: null },
+  groq:   { available: true, lastError: null, cooldownTimer: null },
 };
 
 const FALLBACK_RESPONSES = [
@@ -63,13 +63,23 @@ ${paymentInfo}
 
 CLIENT: ${clientName}
 
+OBJECTION HANDLING (use these naturally, don't copy verbatim):
+- "Too expensive" → "The quality and results you get are worth every rupee! Many clients see a 10x return. 🚀 Want to start with our most affordable option?"
+- "Let me think / later" → "Totally understand! 😊 Just so you know, slots are limited and this price won't last. Shall I reserve yours?"
+- "I'll check with someone" → "Of course! 👍 While you do, I can send all details to share easily. Want our service summary?"
+- "Do you have a discount?" → "We do have occasional offers! 🎉 Right now the best deal is [service]. Want to lock it in today?"
+
+URGENCY TRIGGERS (use subtly, max once per conversation):
+- Mention limited availability: "We only have a few slots open this week"
+- Mention time-sensitive offer: "This pricing is valid for today"
+- Mention social proof: "Many clients in your area have already ordered this week"
+
 STRICT RULES:
 - Never make up prices or services not listed above
 - If asked about custom pricing or refunds, say "Let me connect you with our team for this!"
 - Keep replies SHORT (2–4 sentences max)
 - Use WhatsApp-friendly formatting: emojis ✅💰🚀, *bold* for emphasis
 - Always end with a clear call-to-action (e.g., "Want to get started?" or "Shall I send payment details?")
-- If client seems hesitant: highlight value, urgency, or social proof
 - NEVER say "I cannot" or "I don't know" — always have a helpful response`;
 }
 
@@ -109,10 +119,20 @@ async function callOpenAI(systemPrompt, history, userMessage) {
 }
 
 async function callGemini(systemPrompt, history, userMessage) {
-  const contents = [
+  // Gemini requires strictly alternating user/model turns — deduplicate consecutive same-role entries
+  const raw = [
     ...history.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
     { role: 'user', parts: [{ text: userMessage }] },
   ];
+  const contents = [];
+  for (const item of raw) {
+    if (contents.length > 0 && contents[contents.length - 1].role === item.role) {
+      // Merge consecutive same-role messages into one
+      contents[contents.length - 1].parts[0].text += '\n' + item.parts[0].text;
+    } else {
+      contents.push({ role: item.role, parts: [{ text: item.parts[0].text }] });
+    }
+  }
   const res = await axios.post(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
     { system_instruction: { parts: [{ text: systemPrompt }] }, contents },
@@ -176,8 +196,13 @@ async function generateAIResponse({ systemPrompt, history, conversationHistory, 
       providerHealth[provider].lastError = err.message;
       if (isRateLimit) {
         providerHealth[provider].available = false;
-        setTimeout(() => {
+        // Clear any existing cooldown timer before setting a new one (prevents memory leaks)
+        if (providerHealth[provider].cooldownTimer) {
+          clearTimeout(providerHealth[provider].cooldownTimer);
+        }
+        providerHealth[provider].cooldownTimer = setTimeout(() => {
           providerHealth[provider].available = true;
+          providerHealth[provider].cooldownTimer = null;
           console.log(`[AI] ${provider} re-enabled after cooldown`);
         }, 10 * 60 * 1000);
       }

@@ -1,4 +1,22 @@
 require('dotenv').config();
+
+// ─── Startup Environment Validation ─────────────────────────────────────────────
+const REQUIRED_ENV = ['DATABASE_URL', 'JWT_SECRET', 'OWNER_EMAIL', 'OWNER_PASSWORD', 'FRONTEND_URL'];
+const missing = REQUIRED_ENV.filter(k => !process.env[k]);
+if (missing.length) {
+  console.error(`[Startup] Missing required environment variables: ${missing.join(', ')}`);
+  process.exit(1);
+}
+
+// ─── Global Error Handlers ───────────────────────────────────────────────────────
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[UnhandledRejection]', reason?.stack || reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[UncaughtException]', err.stack || err.message);
+  process.exit(1);
+});
+
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
@@ -46,6 +64,7 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 // ─── Middleware ──────────────────────────────────────────────────────────────────
+// FRONTEND_URL is required at startup (validated above); no wildcard fallback
 app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
 app.use(express.json({ limit: '5mb' }));
 app.use('/uploads', express.static('uploads'));

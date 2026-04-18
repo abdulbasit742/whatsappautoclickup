@@ -19,6 +19,7 @@ export default function Inbox() {
   const [search, setSearch]         = useState('');
   const [selected, setSelected]     = useState(null);
   const [messages, setMessages]     = useState([]);
+  const [msgError, setMsgError]     = useState('');
   const [reply, setReply]           = useState('');
   const [aiLoading, setAiLoading]   = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -63,14 +64,26 @@ export default function Inbox() {
 
   const selectClient = async c => {
     setSelected(c);
-    const r = await api.get(`/clients/${c.id}/messages`);
-    setMessages(r.data);
+    setMessages([]);   // Clear previous conversation immediately
+    setMsgError('');
+    try {
+      const r = await api.get(`/clients/${c.id}/messages`);
+      setMessages(r.data);
+    } catch (e) {
+      setMsgError('Failed to load messages. Please try refreshing.');
+      console.error('Failed to load messages:', e.message);
+    }
   };
 
   const refreshMessages = async () => {
     if (!selected) return;
-    const r = await api.get(`/clients/${selected.id}/messages`);
-    setMessages(r.data);
+    setMsgError('');
+    try {
+      const r = await api.get(`/clients/${selected.id}/messages`);
+      setMessages(r.data);
+    } catch (e) {
+      setMsgError('Failed to refresh messages.');
+    }
   };
 
   const send = async () => {
@@ -217,7 +230,10 @@ export default function Inbox() {
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-1">
-              {messages.length === 0 && (
+              {msgError && (
+                <p className="text-xs text-center text-red-400 mt-8">⚠️ {msgError}</p>
+              )}
+              {!msgError && messages.length === 0 && (
                 <p className="text-xs text-center text-gray-600 mt-8">No messages yet</p>
               )}
               {messages.map((m, i) => <ChatBubble key={m.id || i} msg={m} />)}

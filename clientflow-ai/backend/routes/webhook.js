@@ -12,14 +12,20 @@ function markProcessed(msgId) {
   setTimeout(() => recentlyProcessed.delete(msgId), 5 * 60 * 1000); // clear after 5 min
 }
 
+// ─── Batch-load all settings in one query ────────────────────────────────────────
+async function loadSettings() {
+  const r = await db.query(`SELECT key, value FROM settings`);
+  return Object.fromEntries(r.rows.map(s => [s.key, s.value]));
+}
+
 // ─── Webhook Verification ────────────────────────────────────────────────────────
 router.get('/', (req, res) => {
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
   if (mode === 'subscribe' && token === process.env.WHATSAPP_VERIFY_TOKEN) {
-    // Validate challenge is numeric only before echoing back
-    if (challenge && /^\d+$/.test(challenge)) {
+    // Validate challenge is printable ASCII only (alphanumeric + common punctuation) before echoing back
+    if (challenge && /^[a-zA-Z0-9_\-]+$/.test(challenge)) {
       res.setHeader('Content-Type', 'text/plain');
       return res.status(200).send(challenge);
     }
@@ -55,6 +61,9 @@ router.post('/', async (req, res) => {
 
     const msgs = value?.messages;
     if (!msgs?.length) return;
+
+    // Load all settings once for this webhook batch
+    const settings = await loadSettings();
 
     for (const msg of msgs) {
       const from = msg.from;
@@ -96,19 +105,20 @@ router.post('/', async (req, res) => {
         content = `[${msgType}]`;
       }
 
-      // ─── Find or create client ─────────────────────────────────────────────
-      let clientRes = await db.query(`SELECT * FROM clients WHERE whatsapp_number=$1`, [from]);
-      let client = clientRes.rows[0];
-      const isNew = !client;
+      // ─── Find or create client (race-safe via ON CONFLICT) ──────────────────
+      const referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const upsertRes = await db.query(
+        `INSERT INTO clients (whatsapp_number, referral_code, status)
+         VALUES ($1, $2, 'lead')
+         ON CONFLICT (whatsapp_number) DO UPDATE SET last_active_at=NOW()
+         RETURNING *, (xmax = 0) AS is_new_row`,
+        [from, referralCode]
+      );
+      const client = upsertRes.rows[0];
+      // PostgreSQL: xmax=0 means no existing row was updated → it's a new insert
+      const isNew = client.is_new_row === true || client.is_new_row === 't';
 
       if (isNew) {
-        const referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-        const ins = await db.query(
-          `INSERT INTO clients (whatsapp_number, referral_code, status) VALUES ($1,$2,'lead') RETURNING *`,
-          [from, referralCode]
-        );
-        client = ins.rows[0];
-
         await db.query(
           `INSERT INTO alerts (type, client_id, message, priority) VALUES ('new_client',$1,'New client started a conversation','medium')`,
           [client.id]
@@ -123,28 +133,19 @@ router.post('/', async (req, res) => {
         [client.id, content, msgType, msgId]
       );
 
-      await db.query(`UPDATE clients SET last_active_at=NOW() WHERE id=$1`, [client.id]);
+      // Mark message as read (fire-and-forget, don't block processing)
+      markAsRead(msgId).catch(() => {});
 
-      // Mark message as read
-      await markAsRead(msgId);
-
-      // ─── Check settings ────────────────────────────────────────────────────
-      const [workStart, workEnd, autoReply] = await Promise.all([
-        db.query(`SELECT value FROM settings WHERE key='working_hours_start'`),
-        db.query(`SELECT value FROM settings WHERE key='working_hours_end'`),
-        db.query(`SELECT value FROM settings WHERE key='auto_reply_enabled'`),
-      ]);
-
-      if (autoReply.rows[0]?.value !== 'true') continue;
+      // ─── Check auto-reply setting ──────────────────────────────────────────
+      if (settings['auto_reply_enabled'] !== 'true') continue;
 
       const now = new Date();
       const hour = now.getHours();
-      const [sh] = (workStart.rows[0]?.value || '09:00').split(':').map(Number);
-      const [eh] = (workEnd.rows[0]?.value || '22:00').split(':').map(Number);
+      const [sh] = (settings['working_hours_start'] || '09:00').split(':').map(Number);
+      const [eh] = (settings['working_hours_end'] || '22:00').split(':').map(Number);
 
       if (hour < sh || hour >= eh) {
-        const offlineMsg = await db.query(`SELECT value FROM settings WHERE key='offline_message'`);
-        await sendText(from, offlineMsg.rows[0]?.value || 'We are currently offline. We will reply soon!', client.id);
+        await sendText(from, settings['offline_message'] || 'We are currently offline. We will reply soon!', client.id);
         continue;
       }
 
@@ -159,13 +160,13 @@ router.post('/', async (req, res) => {
       const isPaymentConfirmation = paymentConfirmKeywords.some(k => lc.includes(k));
 
       if (isPaymentConfirmation || isPossiblePaymentProof) {
-        await handlePaymentConfirmationMessage(client, from, content, isPossiblePaymentProof, req.app.get('io'));
+        await handlePaymentConfirmationMessage(client, from, content, isPossiblePaymentProof, settings, req.app.get('io'));
         continue;
       }
 
       // ─── Keyword routing ───────────────────────────────────────────────────
       if (isNew || lc.includes('hello') || lc.includes('hi') || lc.includes('assalam') || lc.includes('start')) {
-        await handleOnboarding(client, from, isNew);
+        await handleOnboarding(client, from, isNew, settings);
         continue;
       }
       if (lc.includes('price') || lc.includes('pricing') || lc.includes('rate') || lc.includes('kitna') || lc.includes('cost') || lc.includes('charges')) {
@@ -173,7 +174,7 @@ router.post('/', async (req, res) => {
         continue;
       }
       if (lc.includes('pay') || lc.includes('payment') || lc.includes('send money') || lc.includes('kaise bhejun') || lc.includes('how to pay')) {
-        await handlePaymentInstructions(client, from);
+        await handlePaymentInstructions(client, from, settings);
         continue;
       }
       if (lc.includes('book') || lc.includes('call') || lc.includes('meeting') || lc.includes('appointment')) {
@@ -188,7 +189,20 @@ router.post('/', async (req, res) => {
         continue;
       }
 
-      await handleAIResponse(client, from, content, req.app.get('io'));
+      // ─── Service selection detection ──────────────────────────────────────
+      // If the client names a specific service, route to payment instructions
+      const activeServices = await db.query(`SELECT name FROM services WHERE is_active=true`);
+      const namedService = activeServices.rows.find(s => lc.includes(s.name.toLowerCase()));
+      if (namedService) {
+        await sendText(from,
+          `✅ Great choice! *${namedService.name}* is one of our most popular services! 🎉\n\nTo get started, please make the payment using the details below and share the screenshot here. 💰`,
+          client.id
+        );
+        await handlePaymentInstructions(client, from, settings);
+        continue;
+      }
+
+      await handleAIResponse(client, from, content, settings, req.app.get('io'));
     }
   } catch (err) {
     console.error('[Webhook] Error:', err.message);
@@ -196,13 +210,9 @@ router.post('/', async (req, res) => {
 });
 
 // ─── Onboarding ──────────────────────────────────────────────────────────────────
-async function handleOnboarding(client, to, isNew) {
-  const [bizRow, descRow] = await Promise.all([
-    db.query(`SELECT value FROM settings WHERE key='business_name'`),
-    db.query(`SELECT value FROM settings WHERE key='business_description'`),
-  ]);
-  const bizName = bizRow.rows[0]?.value || 'Our Business';
-  const bizDesc = descRow.rows[0]?.value || 'Professional services';
+async function handleOnboarding(client, to, isNew, settings) {
+  const bizName = settings['business_name'] || 'Our Business';
+  const bizDesc = settings['business_description'] || 'Professional services';
 
   const greeting = isNew
     ? `Assalam u Alaikum! 👋 Welcome to *${bizName}*!\n\n${bizDesc}\n\nWe're here to help you with professional, fast, and affordable services.\n\nType *pricing* to see our services, or just tell us what you need! 😊`
@@ -237,17 +247,11 @@ async function handlePricing(client, to) {
 }
 
 // ─── Payment Instructions ─────────────────────────────────────────────────────────
-async function handlePaymentInstructions(client, to) {
-  const [easy, jazz, bank] = await Promise.all([
-    db.query(`SELECT value FROM settings WHERE key='easypaisa_number'`),
-    db.query(`SELECT value FROM settings WHERE key='jazzcash_number'`),
-    db.query(`SELECT value FROM settings WHERE key='bank_details'`),
-  ]);
-
+async function handlePaymentInstructions(client, to, settings) {
   const msg = `💳 *Payment Details*\n\n` +
-    `💚 *Easypaisa:* ${easy.rows[0]?.value || 'Not set'}\n` +
-    `💙 *JazzCash:* ${jazz.rows[0]?.value || 'Not set'}\n` +
-    `🏦 *Bank Transfer:* ${bank.rows[0]?.value || 'Contact for details'}\n\n` +
+    `💚 *Easypaisa:* ${settings['easypaisa_number'] || 'Not set'}\n` +
+    `💙 *JazzCash:* ${settings['jazzcash_number'] || 'Not set'}\n` +
+    `🏦 *Bank Transfer:* ${settings['bank_details'] || 'Contact for details'}\n\n` +
     `After sending payment, please share a *screenshot* here. We'll confirm within a few minutes! ✅`;
 
   await sendText(to, msg, client.id);
@@ -261,16 +265,26 @@ async function handlePaymentInstructions(client, to) {
 }
 
 // ─── Payment Confirmation Message Handler ─────────────────────────────────────────
-async function handlePaymentConfirmationMessage(client, to, content, isImage, io) {
+async function handlePaymentConfirmationMessage(client, to, content, isImage, settings, io) {
   // Acknowledge receipt
   await sendText(to,
-    `�� Payment proof received! Our team will verify and confirm within a few minutes. Thank you for your patience! 🙏`,
+    `✅ Payment proof received! Our team will verify and confirm within a few minutes. Thank you for your patience! 🙏`,
     client.id
   );
 
-  // Get owner number for alert
-  const ownerRow = await db.query(`SELECT value FROM settings WHERE key='owner_whatsapp'`);
-  const ownerNum = ownerRow.rows[0]?.value;
+  // Auto-create a pending payment record so admin can confirm directly from dashboard
+  const existingPending = await db.query(
+    `SELECT id FROM payments WHERE client_id=$1 AND status='pending' LIMIT 1`,
+    [client.id]
+  );
+  if (existingPending.rows.length === 0) {
+    await db.query(
+      `INSERT INTO payments (client_id, amount_pkr, notes) VALUES ($1, 0, $2)`,
+      [client.id, `Auto-created from ${isImage ? 'payment screenshot' : 'payment confirmation message'}. Amount to be filled by admin.`]
+    ).catch(() => {});
+  }
+
+  const ownerNum = settings['owner_whatsapp'];
 
   // Create high-priority payment alert for admin
   await db.query(
@@ -284,7 +298,7 @@ async function handlePaymentConfirmationMessage(client, to, content, isImage, io
   if (ownerNum) {
     await sendText(ownerNum,
       `🔔 *Payment Alert!*\n\nClient: ${client.name || to}\nNumber: ${to}\nMessage: ${content.substring(0, 100)}\n\nPlease verify and confirm payment in the dashboard. 💰`
-    );
+    ).catch(() => {});
   }
 
   console.log(`[Webhook] Payment confirmation received from ${to}`);
@@ -297,7 +311,8 @@ async function handleReview(client, to, rating) {
     `INSERT INTO reviews (client_id, rating, sentiment) VALUES ($1,$2,$3)`,
     [client.id, rating, sentiment]
   );
-  const stars = '⭐'.repeat(Math.min(Math.max(1, rating), 5));
+  const safeRating = Math.min(Math.max(1, rating), 5);
+  const stars = '⭐'.repeat(safeRating);
 
   if (rating <= 2) {
     await sendText(to,
@@ -322,14 +337,16 @@ async function handleReview(client, to, rating) {
 }
 
 // ─── AI Response ──────────────────────────────────────────────────────────────────
-async function handleAIResponse(client, to, userMessage, io) {
-  const [histRes, svcs, settings] = await Promise.all([
+async function handleAIResponse(client, to, userMessage, settings, io) {
+  const [histRes, svcs] = await Promise.all([
     db.query(
-      `SELECT direction, content FROM messages WHERE client_id=$1 ORDER BY created_at DESC LIMIT 10`,
+      // Only include AI-generated or manual outbound messages to keep context clean
+      `SELECT direction, content FROM messages
+       WHERE client_id=$1 AND (direction='inbound' OR (direction='outbound' AND ai_provider_used IS NOT NULL))
+       ORDER BY created_at DESC LIMIT 10`,
       [client.id]
     ),
     db.query(`SELECT name, price_pkr FROM services WHERE is_active=true`),
-    db.query(`SELECT key, value FROM settings`),
   ]);
 
   const history = histRes.rows.reverse().map(m => ({
@@ -337,13 +354,12 @@ async function handleAIResponse(client, to, userMessage, io) {
     content: m.content,
   }));
 
-  const settingsMap = Object.fromEntries(settings.rows.map(s => [s.key, s.value]));
-  const bizName = settingsMap['business_name'] || 'Our Business';
+  const bizName = settings['business_name'] || 'Our Business';
   const catalog = svcs.rows.map(s => `- ${s.name}: PKR ${Number(s.price_pkr).toLocaleString()}`).join('\n');
   const paymentInfo = [
-    settingsMap['easypaisa_number'] ? `Easypaisa: ${settingsMap['easypaisa_number']}` : null,
-    settingsMap['jazzcash_number'] ? `JazzCash: ${settingsMap['jazzcash_number']}` : null,
-    settingsMap['bank_details'] ? `Bank: ${settingsMap['bank_details']}` : null,
+    settings['easypaisa_number'] ? `Easypaisa: ${settings['easypaisa_number']}` : null,
+    settings['jazzcash_number'] ? `JazzCash: ${settings['jazzcash_number']}` : null,
+    settings['bank_details'] ? `Bank: ${settings['bank_details']}` : null,
   ].filter(Boolean).join(' | ') || 'Contact for payment info';
 
   const systemPrompt = buildSalesSystemPrompt(bizName, catalog, paymentInfo, client.name || 'valued client');
@@ -366,6 +382,7 @@ async function handleAIResponse(client, to, userMessage, io) {
   const shouldFlag = flagKeywords.some(k => userMessage.toLowerCase().includes(k)) || isWeak;
   const priority = flagKeywords.some(k => userMessage.toLowerCase().includes(k)) ? 'high' : isWeak ? 'medium' : 'low';
 
+  // Log AI message to DB first, then send via WhatsApp
   await db.query(
     `INSERT INTO messages (client_id, direction, content, ai_provider_used, is_flagged) VALUES ($1,'outbound',$2,$3,$4)`,
     [client.id, response, providerUsed, shouldFlag]
@@ -379,7 +396,9 @@ async function handleAIResponse(client, to, userMessage, io) {
     io?.emit('new_alert', { type: 'unresolved_query', clientId: client.id, priority });
   }
 
-  await sendText(to, response);
+  // Pass clientId so the WA message ID is stored back on the logged message
+  await sendText(to, response, client.id);
 }
 
 module.exports = router;
+

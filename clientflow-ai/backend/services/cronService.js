@@ -8,8 +8,8 @@ const FOLLOW_UP_MIN_INTERVAL_HOURS = 12; // Don't send more than 1 follow-up per
 async function wasRecentlyContacted(clientId) {
   const r = await db.query(
     `SELECT id FROM follow_ups WHERE client_id=$1 AND status='sent'
-     AND sent_at > NOW() - INTERVAL '${FOLLOW_UP_MIN_INTERVAL_HOURS} hours' LIMIT 1`,
-    [clientId]
+     AND sent_at > NOW() - INTERVAL '1 hour' * $2 LIMIT 1`,
+    [clientId, FOLLOW_UP_MIN_INTERVAL_HOURS]
   );
   return r.rows.length > 0;
 }
@@ -50,6 +50,11 @@ async function runFollowUps() {
         } else if (f.type === 're_engagement') {
           message = `Assalam u Alaikum ${name}! 👋 It's been a while — we miss you! We have exciting new services and offers you might love. Reply to see what's new! 🎉`;
         } else if (f.type === 'upsell') {
+          // Skip upsell if client has never paid
+          if (f.client_status === 'lead' || f.client_status === 'active') {
+            await db.query(`UPDATE follow_ups SET status='skipped' WHERE id=$1`, [f.id]);
+            continue;
+          }
           // AI-generated upsell
           try {
             const services = (await db.query(`SELECT name, price_pkr FROM services WHERE is_active=true LIMIT 5`)).rows;
