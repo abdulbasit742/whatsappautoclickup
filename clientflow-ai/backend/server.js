@@ -39,6 +39,7 @@ const analyticsRouter   = require('./routes/analytics');
 const settingsRouter    = require('./routes/settings');
 const followupRouter    = require('./routes/followups');
 const aiRouter          = require('./routes/ai');
+const apiKeysRouter     = require('./routes/apikeys');
 
 app.use('/webhook',          webhookRouter);
 app.use('/api/auth',         authRouter);
@@ -55,6 +56,25 @@ app.use('/api/analytics',    analyticsRouter);
 app.use('/api/settings',     settingsRouter);
 app.use('/api/followups',    followupRouter);
 app.use('/api/ai',           aiRouter);
+app.use('/api/apikeys',      apiKeysRouter);
+
+// ─── Queue health endpoint ────────────────────────────────────────────────────────
+const { messageQueue, broadcastQueue, followupQueue, aiTaskQueue } = require('./modules/queue/queues');
+app.get('/api/queue/health', async (req, res, next) => {
+  try {
+    const queues = { messageQueue, broadcastQueue, followupQueue, aiTaskQueue };
+    const stats = {};
+    for (const [name, q] of Object.entries(queues)) {
+      const [waiting, active, failed] = await Promise.all([
+        q.getWaitingCount(),
+        q.getActiveCount(),
+        q.getFailedCount(),
+      ]);
+      stats[name] = { waiting, active, failed };
+    }
+    res.json({ status: 'ok', queues: stats });
+  } catch (err) { next(err); }
+});
 
 // ─── Socket.io ───────────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
@@ -65,6 +85,10 @@ io.on('connection', (socket) => {
 // ─── Cron Jobs ───────────────────────────────────────────────────────────────────
 const { initCronJobs } = require('./services/cronService');
 initCronJobs();
+
+// ─── Global error handler (must be last) ─────────────────────────────────────────
+const errorHandler = require('./middleware/errorHandler');
+app.use(errorHandler);
 
 // ─── Start ───────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;

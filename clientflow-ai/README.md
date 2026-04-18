@@ -1,170 +1,197 @@
-# 🚀 ClientFlow AI — WhatsApp Business Automation
+# ClientFlow AI — Production Backend
 
-A full-stack WhatsApp CRM & automation platform for freelancers and small businesses. Handles client onboarding, AI responses, payments, follow-ups, reviews, broadcasts, and more — all from one dark dashboard.
-
----
-
-## ✨ Features
-
-- 🤖 **Multi-AI Fallback** — Claude → GPT-4o → Gemini → Groq (auto-switches on credit exhaustion)
-- 💬 **WhatsApp Automation** — Auto-reply, onboarding, pricing, payment flow via Meta Cloud API
-- 💰 **Payments** — Easypaisa / JazzCash / Bank with screenshot confirmation
-- 📊 **Analytics Dashboard** — Revenue charts, message volume, conversion funnel, AI usage
-- 📅 **Follow-Up Engine** — Cron-based: cold leads, pending payments, post-delivery, re-engagement
-- 📢 **Broadcasts** — Targeted bulk messages with AI writer + scheduling
-- ⭐ **Reviews & Sentiment** — Auto-collect ratings, sentiment analysis charts
-- 🔔 **Real-time Alerts** — Socket.io for new clients, flagged queries, payment alerts
-- 👥 **CRM** — Full client profiles, chat history, payment history, referral tracking
+AI-powered CRM & WhatsApp automation system. Built with Node.js (Express), PostgreSQL, Redis + BullMQ.
 
 ---
 
-## 📁 Project Structure
+## 🗂 Folder Structure
 
 ```
 clientflow-ai/
-├── frontend/          # React + Vite + Tailwind CSS
-│   └── src/
-│       ├── components/   Sidebar, StatCard, ChatBubble, AlertBell, DataTable, Toast
-│       └── pages/        13 dashboard pages
-├── backend/           # Node.js + Express
-│   ├── routes/           15 API route files
-│   ├── services/         aiService, whatsappService, cronService
-│   ├── middleware/        JWT auth
-│   └── db/               PostgreSQL pool
+├── backend/
+│   ├── config/
+│   │   └── redis.js               # IORedis connection (used by BullMQ)
+│   ├── db/
+│   │   └── index.js               # PostgreSQL pool (pg)
+│   ├── middleware/
+│   │   ├── auth.js                # JWT auth middleware
+│   │   └── errorHandler.js        # Global Express error handler
+│   ├── modules/
+│   │   ├── ai/
+│   │   │   └── aiService.js       # AI provider fallback chain (Groq → OpenAI → Claude → Gemini)
+│   │   ├── apikeys/
+│   │   │   └── apiKeyManager.js   # DB-backed API key manager with rotation & rate-limit tracking
+│   │   ├── queue/
+│   │   │   ├── queues.js          # BullMQ Queue definitions
+│   │   │   └── workers/
+│   │   │       ├── messageWorker.js   # Sends individual WhatsApp messages
+│   │   │       ├── broadcastWorker.js # Fan-out broadcast jobs to messageQueue
+│   │   │       └── followupWorker.js  # Generates & queues follow-up messages
+│   │   └── whatsapp/
+│   │       └── whatsappService.js # WhatsApp Cloud API calls (sendText, sendTemplate)
+│   ├── routes/
+│   │   ├── ai.js           ── /api/ai
+│   │   ├── alerts.js       ── /api/alerts
+│   │   ├── analytics.js    ── /api/analytics
+│   │   ├── apikeys.js      ── /api/apikeys       ← NEW
+│   │   ├── appointments.js ── /api/appointments
+│   │   ├── auth.js         ── /api/auth
+│   │   ├── broadcasts.js   ── /api/broadcasts
+│   │   ├── clients.js      ── /api/clients
+│   │   ├── followups.js    ── /api/followups
+│   │   ├── payments.js     ── /api/payments
+│   │   ├── referrals.js    ── /api/referrals
+│   │   ├── reviews.js      ── /api/reviews
+│   │   ├── services.js     ── /api/services
+│   │   ├── settings.js     ── /api/settings
+│   │   ├── templates.js    ── /api/templates
+│   │   └── webhook.js      ── /webhook
+│   ├── services/
+│   │   ├── aiService.js       # Shim → modules/ai/aiService.js
+│   │   ├── cronService.js     # node-cron jobs (enqueue to BullMQ)
+│   │   └── whatsappService.js # Legacy shim (kept for compatibility)
+│   ├── utils/
+│   │   └── logger.js          # Structured JSON logger
+│   ├── server.js              # Express API server entry point
+│   ├── worker.js              # Standalone BullMQ worker entry point
+│   └── package.json
 ├── database/
-│   ├── schema.sql        14 tables
-│   └── seed.sql          Sample services + default settings
-├── .env.example
-└── README.md
+│   ├── schema.sql             # PostgreSQL schema (16 tables)
+│   └── seed.sql               # Sample seed data
+└── frontend/                  # React + Vite frontend
 ```
 
 ---
 
-## ⚡ Quick Start
+## 🗄 Database Schema (16 Tables)
 
-### Prerequisites
-- Node.js 18+
-- PostgreSQL 14+
-- WhatsApp Business account (Meta Developer Portal)
-- At least one AI API key (Claude recommended)
-
-### 1. Install Dependencies
-
-```bash
-cd backend && npm install
-cd ../frontend && npm install
-```
-
-### 2. Database Setup
-
-```bash
-psql -U postgres -c "CREATE DATABASE clientflow;"
-psql -U postgres -d clientflow -f database/schema.sql
-psql -U postgres -d clientflow -f database/seed.sql
-```
-
-### 3. Environment Variables
-
-```bash
-cp .env.example backend/.env
-# Edit backend/.env with your values
-```
-
-**Required:**
-
-| Variable | Where to get |
+| Table | Purpose |
 |---|---|
-| `DATABASE_URL` | `postgresql://user:pass@localhost:5432/clientflow` |
-| `JWT_SECRET` | Any long random string |
-| `OWNER_EMAIL` | Your dashboard login email |
-| `OWNER_PASSWORD` | Your dashboard login password |
-| `WHATSAPP_TOKEN` | Meta Developer Portal |
-| `WHATSAPP_PHONE_ID` | Meta Developer Portal |
-| `WHATSAPP_VERIFY_TOKEN` | Any custom string (you choose) |
-| `ANTHROPIC_API_KEY` | console.anthropic.com |
-| `FRONTEND_URL` | `http://localhost:5173` |
-
-**Optional (AI fallback):**
-```
-OPENAI_API_KEY=...
-GEMINI_API_KEY=...
-GROQ_API_KEY=...
-```
-
-### 4. Run Locally
-
-```bash
-# Terminal 1
-cd backend && npm run dev    # → http://localhost:5000
-
-# Terminal 2
-cd frontend && npm run dev   # → http://localhost:5173
-```
-
-Login at `http://localhost:5173` with `OWNER_EMAIL` / `OWNER_PASSWORD`.
+| `clients` | WhatsApp contacts / CRM records |
+| `messages` | All inbound/outbound WhatsApp messages |
+| `services` | Business service catalog |
+| `payments` | Payment records (Easypaisa/JazzCash/bank) |
+| `alerts` | Owner notifications (new clients, AI failures, etc.) |
+| `reviews` | Client ratings & sentiment |
+| `broadcasts` | Bulk message campaigns |
+| `broadcast_recipients` | Per-client broadcast delivery tracking |
+| `templates` | Reusable message templates |
+| `appointments` | Scheduled client sessions |
+| `referrals` | Referral tracking |
+| `follow_ups` | Scheduled follow-up messages |
+| `ai_logs` | Per-request AI provider usage & latency |
+| `settings` | Key-value business configuration |
+| **`api_keys`** | **API key pool per provider (rotation support)** |
+| **`job_logs`** | **BullMQ job failure audit log** |
 
 ---
 
-## 📱 WhatsApp Webhook Setup
+## 🔗 API Routes
 
-1. Go to [developers.facebook.com](https://developers.facebook.com) → Create App → Business
-2. Add WhatsApp product → Get **Phone Number ID** and **Access Token**
-3. Webhook URL: `https://your-domain.com/webhook`
-4. Verify token: same as `WHATSAPP_VERIFY_TOKEN` in `.env`
-5. Subscribe to: `messages`, `message_deliveries`, `message_reads`
-
-**Local testing with ngrok:**
-```bash
-ngrok http 5000
-# Use the HTTPS URL as webhook
-```
-
----
-
-## 🚀 Deployment
-
-**Frontend → Vercel:** Build with `npm run build`, deploy `/dist`
-
-**Backend → Railway:**
-1. Push to GitHub
-2. Connect to [railway.app](https://railway.app) → Add PostgreSQL plugin
-3. Set all env vars → Deploy
-
----
-
-## 🔧 First Login Checklist
-
-1. ⚙️ **Settings** → Add business name, payment numbers (Easypaisa/JazzCash), AI API keys
-2. 📦 **Services** → Add your service offerings with prices
-3. ✅ Toggle **Auto-Reply** ON in Settings
-4. 🔗 Connect WhatsApp webhook
-5. 💬 Send a test WhatsApp message to your number
-
----
-
-## 🤖 AI Providers
-
-| Provider | Key From | Fallback Priority |
+### Auth
+| Method | Path | Description |
 |---|---|---|
-| Claude Sonnet | console.anthropic.com | 1st |
-| GPT-4o | platform.openai.com | 2nd |
-| Gemini 1.5 Flash | aistudio.google.com | 3rd |
-| Groq Llama 3.3 | console.groq.com | 4th |
+| POST | `/api/auth/login` | Owner login → JWT |
 
-System auto-falls back on 429 / credit errors. Check `/api/ai/health` for provider status.
+### Clients
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/clients` | List all clients |
+| GET | `/api/clients/:id` | Get client detail |
+| PATCH | `/api/clients/:id` | Update client |
+
+### Broadcasts
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/broadcasts` | List broadcasts |
+| POST | `/api/broadcasts` | Create broadcast |
+| POST | `/api/broadcasts/:id/send` | **Enqueue** broadcast for async sending |
+
+### API Keys *(new)*
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/apikeys` | List keys (values masked) |
+| GET | `/api/apikeys?service=groq` | Filter by service |
+| GET | `/api/apikeys/health` | Check which providers are configured |
+| POST | `/api/apikeys` | Add a new key |
+| DELETE | `/api/apikeys/:id` | Deactivate a key |
+| POST | `/api/apikeys/:id/reset-limit` | Clear rate limit on a key |
+
+### Queue Health *(new)*
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/queue/health` | BullMQ queue stats (waiting/active/failed) |
 
 ---
 
-## 🆘 Common Issues
+## ⚡ Queue Flow
 
-| Problem | Fix |
-|---|---|
-| "Invalid credentials" on login | Check `OWNER_EMAIL`/`OWNER_PASSWORD` in `backend/.env` |
-| WhatsApp not receiving messages | Verify webhook is HTTPS, verify token matches |
-| AI not responding | Check API key in Settings, visit `/api/ai/health` |
-| Database errors | Make sure `schema.sql` ran before `seed.sql` |
-| CORS errors | Set `FRONTEND_URL` correctly in `.env` |
+```
+Cron / API Request
+       │
+       ▼
+  broadcastQueue  ──► BroadcastWorker
+       │                    │
+       │          fans out  ▼
+       │           messageQueue ──► MessageWorker ──► WhatsApp Cloud API
+       │
+  followupQueue   ──► FollowupWorker
+       │                    │
+       │          enqueues  ▼
+       │           messageQueue ──► MessageWorker ──► WhatsApp Cloud API
+       │
+  whatsapp-messages (direct)
+  (webhook AI replies, reminders, weekly summary)
+```
+
+**Retry policy:** 3 attempts with exponential backoff (5s → 25s → 125s).  
+**Rate limit:** MessageWorker is capped at 80 sends/minute.  
+**Concurrency:** Message=5, Broadcast=3, Followup=3 workers.
 
 ---
 
-Built with ❤️ using React, Node.js, PostgreSQL, and WhatsApp Business API.
+## 🤖 AI Module
+
+Provider priority (first available key wins):
+
+1. **Groq** — `llama-3.3-70b-versatile` *(active)*
+2. OpenAI — `gpt-4o` *(placeholder — add key to activate)*
+3. Claude — `claude-sonnet-4` *(placeholder — add key to activate)*
+4. Gemini — `gemini-1.5-flash` *(placeholder — add key to activate)*
+
+Keys are read from the `api_keys` DB table first (supports rotation),  
+falling back to environment variables. Rate-limited keys are automatically  
+skipped and re-enabled after 10 minutes.
+
+---
+
+## 🚀 Running
+
+### API Server
+```bash
+npm start          # production
+npm run dev        # development (nodemon)
+```
+
+### Worker Process (separate terminal or PM2)
+```bash
+npm run worker          # production
+npm run dev:worker      # development (nodemon)
+
+# PM2
+pm2 start worker.js --name clientflow-worker
+```
+
+### Environment Variables
+Copy `.env.example` to `.env` and fill in your values.  
+**REDIS_URL** is new — defaults to `redis://localhost:6379`.
+
+---
+
+## 🔒 Error Handling
+
+- All route errors are forwarded to the global `errorHandler` middleware
+- `NODE_ENV=production` hides stack traces from API responses
+- Worker failures are logged to the `job_logs` table
+- AI provider failures trigger automatic failover to the next provider
+- Rate-limited API keys are temporarily excluded and auto-recovered

@@ -182,3 +182,37 @@ CREATE TABLE settings (
   value      TEXT,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ─── API KEYS ────────────────────────────────────────────────────────────────────
+-- Stores API keys for AI providers and external services.
+-- Supports multiple keys per service for rotation; least-used key is selected first.
+CREATE TABLE api_keys (
+  id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  service             VARCHAR(50) NOT NULL
+                        CHECK (service IN ('groq','openai','claude','gemini','whatsapp')),
+  key_value           TEXT NOT NULL,
+  label               VARCHAR(100),
+  is_active           BOOLEAN DEFAULT TRUE,
+  usage_count         INT DEFAULT 0,
+  last_used_at        TIMESTAMPTZ,
+  rate_limited_until  TIMESTAMPTZ,
+  created_at          TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_api_keys_service ON api_keys(service, is_active);
+
+-- ─── JOB LOGS ────────────────────────────────────────────────────────────────────
+-- Stores BullMQ job failure records for observability and auditing.
+CREATE TABLE job_logs (
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  queue_name   VARCHAR(50) NOT NULL,
+  job_id       VARCHAR(100),
+  job_type     VARCHAR(50),
+  status       VARCHAR(20) CHECK (status IN ('completed','failed','retrying')),
+  payload      JSONB,
+  error        TEXT,
+  attempts     INT DEFAULT 1,
+  processed_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_job_logs_queue   ON job_logs(queue_name, status);
+CREATE INDEX idx_job_logs_created ON job_logs(processed_at DESC);
+
