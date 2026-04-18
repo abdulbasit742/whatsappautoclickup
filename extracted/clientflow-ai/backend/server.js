@@ -16,6 +16,21 @@ app.set('io', io);
 // ─── Middleware ──────────────────────────────────────────────────────────────────
 app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
 app.use(express.json());
+
+// ─── Global API Rate Limiter ─────────────────────────────────────────────────────
+const apiRateMap = new Map();
+app.use('/api/', (req, res, next) => {
+  const key = req.ip;
+  const now = Date.now();
+  const window = 60_000; // 1 minute
+  const max = 200;       // 200 requests per minute per IP
+  const rec = apiRateMap.get(key) || { count: 0, resetAt: now + window };
+  if (now > rec.resetAt) { rec.count = 0; rec.resetAt = now + window; }
+  rec.count += 1;
+  apiRateMap.set(key, rec);
+  if (rec.count > max) return res.status(429).json({ error: 'Too many requests' });
+  next();
+});
 app.use('/uploads', express.static('uploads'));
 
 const upload = multer({ dest: 'uploads/' });
