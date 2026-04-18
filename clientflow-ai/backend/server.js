@@ -4,6 +4,7 @@ const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
 const multer = require('multer');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const server = http.createServer(app);
@@ -17,6 +18,24 @@ app.set('io', io);
 app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
+
+// Global rate limiter: 200 requests per minute per IP
+app.use('/api/', rateLimit({
+  windowMs: 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+}));
+
+// Stricter limiter for the auth login endpoint
+app.use('/api/auth/login', rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts, please try again later.' },
+}));
 
 const upload = multer({ dest: 'uploads/' });
 app.post('/api/upload', upload.single('file'), (req, res) => {

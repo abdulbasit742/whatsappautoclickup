@@ -10,6 +10,8 @@ router.get('/', (req, res) => {
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
   if (mode === 'subscribe' && token === process.env.WHATSAPP_VERIFY_TOKEN) {
+    // Validate challenge contains only alphanumeric characters before echoing
+    if (!challenge || !/^\w+$/.test(challenge)) return res.sendStatus(400);
     return res.status(200).send(challenge);
   }
   res.sendStatus(403);
@@ -47,7 +49,7 @@ router.post('/', async (req, res) => {
       const msgType = msg.type;
       let content = '';
 
-      if (msgType === 'text') content = msg.text.body;
+      if (msgType === 'text') content = (msg.text.body || '').slice(0, 4096);
       else if (msgType === 'image') content = '[Image received]';
       else if (msgType === 'audio') content = '[Voice message received]';
       else if (msgType === 'document') content = `[Document: ${msg.document?.filename || 'file'}]`;
