@@ -4,8 +4,29 @@ const bcrypt = require('bcrypt');
 const router = express.Router();
 const db = require('../db');
 
+// Simple in-memory rate limiter for auth endpoints
+const rateLimitMap = new Map();
+function rateLimit(maxRequests, windowMs) {
+  return (req, res, next) => {
+    const key = req.ip;
+    const now = Date.now();
+    const record = rateLimitMap.get(key) || { count: 0, resetAt: now + windowMs };
+    if (now > record.resetAt) {
+      record.count = 0;
+      record.resetAt = now + windowMs;
+    }
+    record.count += 1;
+    rateLimitMap.set(key, record);
+    if (record.count > maxRequests) {
+      return res.status(429).json({ error: 'Too many requests, please try again later' });
+    }
+    next();
+  };
+}
+const authRateLimit = rateLimit(10, 15 * 60 * 1000); // 10 requests per 15 minutes
+
 // Signup
-router.post('/signup', async (req, res) => {
+router.post('/signup', authRateLimit, async (req, res) => {
   try {
     const { email, password, name, role = 'agent' } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
@@ -23,7 +44,7 @@ router.post('/signup', async (req, res) => {
 });
 
 // Login (supports both env-var owner and DB users)
-router.post('/login', async (req, res) => {
+router.post('/login', authRateLimit, async (req, res) => {
   try {
     const { email, password } = req.body;
     // Owner login (env-based)

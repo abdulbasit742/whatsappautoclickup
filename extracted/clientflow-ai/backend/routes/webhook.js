@@ -10,7 +10,9 @@ router.get('/', (req, res) => {
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
   if (mode === 'subscribe' && token === process.env.WHATSAPP_VERIFY_TOKEN) {
-    return res.status(200).send(challenge);
+    // Echo challenge back as plain text (required by WhatsApp API)
+    res.type('text/plain').status(200).send(String(challenge));
+    return;
   }
   res.sendStatus(403);
 });
