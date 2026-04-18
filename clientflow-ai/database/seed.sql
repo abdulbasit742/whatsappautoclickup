@@ -29,4 +29,5 @@ INSERT INTO settings (key, value) VALUES
   ('follow_up_payment_hours', '24'),
   ('follow_up_post_delivery_days', '2'),
   ('follow_up_re_engagement_days', '14'),
-  ('ai_provider_priority', 'claude,openai,gemini,groq');
+  ('ai_provider_priority', 'claude,openai,gemini,groq'),
+  ('service_delivery_message', '🎉 Your service is now active, {{name}}! Here are your details:\n\n[Add service details here]\n\nThank you for choosing us! Feel free to reach out if you need anything. 😊');

@@ -1,30 +1,65 @@
-import { useEffect, useState, useRef } from 'react';
-import { Send, Sparkles, Search } from 'lucide-react';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { Send, Sparkles, Search, Clock, ChevronDown } from 'lucide-react';
+import { io } from 'socket.io-client';
 import api from '../utils/api';
 import ChatBubble from '../components/ChatBubble';
 
-export default function Inbox() {
-  const [clients, setClients]   = useState([]);
-  const [filtered, setFiltered] = useState([]);
-  const [search, setSearch]     = useState('');
-  const [selected, setSelected] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [reply, setReply]       = useState('');
-  const [aiLoading, setAiLoading] = useState(false);
-  const bottomRef = useRef(null);
+const QUICK_TEMPLATES = [
+  { label: 'Greeting',        text: 'Assalam u Alaikum! 👋 How can we help you today?' },
+  { label: 'Pricing',        text: 'Sure! Here are our services and pricing. Please type *pricing* to see the full list. 😊' },
+  { label: 'Payment prompt', text: 'To proceed, please send payment to our Easypaisa/JazzCash number and share the screenshot here. ✅' },
+  { label: 'Confirmed',      text: '✅ Payment confirmed! Your service is now being processed. We will update you shortly. 🚀' },
+  { label: 'Follow up',      text: 'Hi! Just checking in 😊 Did you have any questions about our services?' },
+  { label: 'Thank you',      text: 'Thank you so much! It was a pleasure working with you. 🙏 Please rate us from 1–5!' },
+];
 
-  useEffect(() => {
-    api.get('/clients').then(r => { setClients(r.data); setFiltered(r.data); });
+export default function Inbox() {
+  const [clients, setClients]       = useState([]);
+  const [filtered, setFiltered]     = useState([]);
+  const [search, setSearch]         = useState('');
+  const [selected, setSelected]     = useState(null);
+  const [messages, setMessages]     = useState([]);
+  const [reply, setReply]           = useState('');
+  const [aiLoading, setAiLoading]   = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [sending, setSending]       = useState(false);
+  const bottomRef = useRef(null);
+  const templateRef = useRef(null);
+
+  const loadClients = useCallback(() => {
+    return api.get('/clients').then(r => { setClients(r.data); setFiltered(r.data); });
   }, []);
 
   useEffect(() => {
+    loadClients();
+
+    const socket = io('', { path: '/socket.io' });
+    // Refresh client list on new messages
+    socket.on('new_alert', loadClients);
+    return () => socket.disconnect();
+  }, [loadClients]);
+
+  useEffect(() => {
     const q = search.toLowerCase();
-    setFiltered(clients.filter(c => (c.name || '').toLowerCase().includes(q) || c.whatsapp_number.includes(q)));
+    setFiltered(clients.filter(c =>
+      (c.name || '').toLowerCase().includes(q) || c.whatsapp_number.includes(q)
+    ));
   }, [search, clients]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Close template dropdown when clicking outside
+  useEffect(() => {
+    function handleClick(e) {
+      if (templateRef.current && !templateRef.current.contains(e.target)) {
+        setShowTemplates(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
   const selectClient = async c => {
     setSelected(c);
@@ -32,11 +67,26 @@ export default function Inbox() {
     setMessages(r.data);
   };
 
+  const refreshMessages = async () => {
+    if (!selected) return;
+    const r = await api.get(`/clients/${selected.id}/messages`);
+    setMessages(r.data);
+  };
+
   const send = async () => {
-    if (!reply.trim() || !selected) return;
-    await api.post(`/clients/${selected.id}/send`, { message: reply });
-    setMessages(m => [...m, { id: Date.now(), direction: 'outbound', content: reply, created_at: new Date() }]);
+    if (!reply.trim() || !selected || sending) return;
+    setSending(true);
+    const text = reply;
     setReply('');
+    try {
+      await api.post(`/clients/${selected.id}/send`, { message: text });
+      setMessages(m => [...m, { id: Date.now(), direction: 'outbound', content: text, created_at: new Date() }]);
+    } catch (e) {
+      alert('Failed to send: ' + (e.response?.data?.error || e.message));
+      setReply(text);
+    } finally {
+      setSending(false);
+    }
   };
 
   const suggestReply = async () => {
@@ -50,6 +100,24 @@ export default function Inbox() {
       alert('AI error: ' + (e.response?.data?.error || e.message));
     } finally {
       setAiLoading(false);
+    }
+  };
+
+  const triggerFollowUp = async (type) => {
+    if (!selected) return;
+    try {
+      // Create immediate follow-up
+      const fu = await api.post('/followups', {
+        client_id: selected.id,
+        type,
+        scheduled_at: new Date().toISOString(),
+      });
+      // Trigger it immediately
+      await api.post(`/followups/trigger/${fu.data.id}`);
+      alert('Follow-up sent successfully!');
+      await refreshMessages();
+    } catch (e) {
+      alert('Failed: ' + (e.response?.data?.error || e.message));
     }
   };
 
@@ -80,7 +148,7 @@ export default function Inbox() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-white truncate">{c.name || c.whatsapp_number}</p>
-                  <p className="text-xs text-gray-500 truncate">{c.whatsapp_number}</p>
+                  <p className="text-xs text-gray-500 truncate">{c.status}</p>
                 </div>
               </div>
             </div>
@@ -108,12 +176,42 @@ export default function Inbox() {
                 <p className="font-medium text-white text-sm">{selected.name || selected.whatsapp_number}</p>
                 <p className="text-xs text-gray-500">{selected.whatsapp_number}</p>
               </div>
-              <div className="ml-auto">
+              <div className="ml-auto flex items-center gap-2">
                 <span className={`text-xs px-2 py-0.5 rounded-full ${
                   selected.status === 'paid' ? 'bg-emerald-500/20 text-emerald-400' :
                   selected.status === 'active' ? 'bg-blue-500/20 text-blue-400' :
                   'bg-yellow-500/20 text-yellow-400'
                 }`}>{selected.status}</span>
+                {/* Follow-up buttons */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowTemplates(v => !v)}
+                    className="flex items-center gap-1 text-xs text-gray-400 hover:text-white border border-[#2a2a2a] px-2 py-1 rounded-lg transition-colors"
+                    title="Quick follow-up"
+                  >
+                    <Clock size={12} /> Follow-up <ChevronDown size={10} />
+                  </button>
+                  {showTemplates && (
+                    <div ref={templateRef} className="absolute right-0 top-8 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl shadow-xl z-20 w-48 py-1">
+                      {['cold_lead', 'pending_payment', 'post_delivery', 're_engagement', 'upsell'].map(t => (
+                        <button
+                          key={t}
+                          onClick={() => { triggerFollowUp(t); setShowTemplates(false); }}
+                          className="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-white/5 capitalize"
+                        >
+                          {t.replace(/_/g, ' ')}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={refreshMessages}
+                  className="text-xs text-gray-400 hover:text-white border border-[#2a2a2a] px-2 py-1 rounded-lg"
+                  title="Refresh messages"
+                >
+                  ↻
+                </button>
               </div>
             </div>
 
@@ -126,32 +224,51 @@ export default function Inbox() {
               <div ref={bottomRef} />
             </div>
 
+            {/* Quick Templates Bar */}
+            <div className="px-3 pt-2 flex gap-2 overflow-x-auto border-t border-[#2a2a2a] pb-1 scrollbar-hide">
+              {QUICK_TEMPLATES.map(t => (
+                <button
+                  key={t.label}
+                  onClick={() => setReply(t.text)}
+                  className="text-xs whitespace-nowrap bg-[#2a2a2a] hover:bg-[#333] text-gray-300 px-3 py-1 rounded-full transition-colors shrink-0"
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
             {/* Reply Box */}
             <div className="p-3 border-t border-[#2a2a2a] shrink-0">
               <div className="flex gap-2">
                 <div className="flex-1 relative">
-                  <input
+                  <textarea
                     value={reply}
                     onChange={e => setReply(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && send()}
-                    placeholder="Type a message..."
-                    className="w-full bg-[#0f0f0f] border border-[#2a2a2a] rounded-lg pl-4 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+                    }}
+                    placeholder="Type a message... (Enter to send, Shift+Enter for new line)"
+                    rows={2}
+                    className="w-full bg-[#0f0f0f] border border-[#2a2a2a] rounded-lg pl-4 pr-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 resize-none"
                   />
                 </div>
-                <button
-                  onClick={suggestReply}
-                  disabled={aiLoading}
-                  title="AI suggest reply"
-                  className="bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 px-3 py-2 rounded-lg transition-colors disabled:opacity-50"
-                >
-                  <Sparkles size={16} />
-                </button>
-                <button
-                  onClick={send}
-                  className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg transition-colors"
-                >
-                  <Send size={16} />
-                </button>
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={suggestReply}
+                    disabled={aiLoading}
+                    title="AI suggest reply"
+                    className="bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 px-3 py-2 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    <Sparkles size={16} />
+                  </button>
+                  <button
+                    onClick={send}
+                    disabled={sending}
+                    className="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    <Send size={16} />
+                  </button>
+                </div>
               </div>
               {aiLoading && <p className="text-xs text-purple-400 mt-1">✨ AI is thinking...</p>}
             </div>

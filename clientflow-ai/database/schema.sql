@@ -39,6 +39,7 @@ CREATE TABLE messages (
 CREATE INDEX idx_messages_client ON messages(client_id);
 CREATE INDEX idx_messages_flagged ON messages(is_flagged);
 CREATE INDEX idx_messages_created ON messages(created_at DESC);
+CREATE UNIQUE INDEX idx_messages_wa_id ON messages(whatsapp_message_id) WHERE whatsapp_message_id IS NOT NULL;
 
 -- ─── SERVICES ───────────────────────────────────────────────────────────────────
 CREATE TABLE services (
@@ -75,12 +76,14 @@ CREATE TABLE alerts (
   type        VARCHAR(50) NOT NULL CHECK (type IN ('unresolved_query','pending_payment','new_review','inactive_client','ai_failure','new_client','complaint')),
   client_id   UUID REFERENCES clients(id) ON DELETE CASCADE,
   message     TEXT,
+  priority    VARCHAR(10) DEFAULT 'medium' CHECK (priority IN ('high','medium','low')),
   is_resolved BOOLEAN DEFAULT FALSE,
   resolved_at TIMESTAMPTZ,
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX idx_alerts_resolved ON alerts(is_resolved);
 CREATE INDEX idx_alerts_created ON alerts(created_at DESC);
+CREATE INDEX idx_alerts_priority ON alerts(priority);
 
 -- ─── REVIEWS ────────────────────────────────────────────────────────────────────
 CREATE TABLE reviews (
