@@ -169,14 +169,16 @@ async function handlePaymentInstructions(client, to) {
 }
 
 async function handleReview(client, to, rating) {
-  const sentiment = rating >= 4 ? 'positive' : rating === 3 ? 'neutral' : 'negative';
+  // Clamp rating to the valid 1-5 range to prevent resource exhaustion
+  const safeRating = Math.min(5, Math.max(1, Math.floor(rating)));
+  const sentiment = safeRating >= 4 ? 'positive' : safeRating === 3 ? 'neutral' : 'negative';
   await db.query(
     `INSERT INTO reviews (client_id, rating, sentiment) VALUES ($1,$2,$3)`,
-    [client.id, rating, sentiment]
+    [client.id, safeRating, sentiment]
   );
-  const stars = '⭐'.repeat(rating);
+  const stars = '⭐'.repeat(safeRating);
   await sendText(to, `${stars} Thank you for your rating! Your feedback means a lot to us. 🙏`);
-  if (rating >= 4) {
+  if (safeRating >= 4) {
     await sendText(to, `We're so glad you had a great experience! Would you like to try any of our other services? Type *pricing* to see options. 🚀`);
   }
 }
