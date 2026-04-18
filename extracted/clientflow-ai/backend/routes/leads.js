@@ -2,11 +2,13 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
+const { createRateLimiter } = require('../middleware/rateLimiter');
 
+const apiRateLimit = createRateLimiter(100, 60 * 1000);
 router.use(auth);
 
 // Recalculate and get lead scores
-router.post('/recalculate', async (req, res) => {
+router.post('/recalculate', apiRateLimit, async (req, res) => {
   try {
     // Hot: replied in last 24h OR total_spent > 0
     await db.query(`

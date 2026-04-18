@@ -2,11 +2,13 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
+const { createRateLimiter } = require('../middleware/rateLimiter');
 
+const apiRateLimit = createRateLimiter(100, 60 * 1000);
 router.use(auth);
 
 // Get all issues
-router.get('/', async (req, res) => {
+router.get('/', apiRateLimit, async (req, res) => {
   try {
     const { status, type } = req.query;
     let q = `SELECT i.*, c.name as client_name, c.whatsapp_number FROM issues i

@@ -64,7 +64,7 @@ router.post('/login', authRateLimit, async (req, res) => {
 });
 
 // Get current user
-router.get('/me', (req, res) => {
+router.get('/me', authRateLimit, (req, res) => {
   const auth = req.headers.authorization?.split(' ')[1];
   if (!auth) return res.status(401).json({ error: 'No token' });
   try {
@@ -76,7 +76,7 @@ router.get('/me', (req, res) => {
 });
 
 // List users (admin only)
-router.get('/users', async (req, res) => {
+router.get('/users', authRateLimit, async (req, res) => {
   const auth = req.headers.authorization?.split(' ')[1];
   if (!auth) return res.status(401).json({ error: 'No token' });
   try {
