@@ -232,14 +232,68 @@ async function autoResolveOldAlerts() {
   }
 }
 
+// ─── Auto-Update Client Segments (runs every 6 hours) ─────────────────────────
+// Marks previously 'active' clients as 'inactive' if they've been quiet 30+ days.
+// This keeps the funnel accurate for analytics and follow-up targeting.
+async function updateClientSegments() {
+  try {
+    // 1. active → inactive if no activity for 30 days
+    const deactivated = await db.query(
+      `UPDATE clients SET status='inactive'
+       WHERE status='active'
+         AND last_active_at < NOW() - INTERVAL '30 days'
+       RETURNING id`
+    );
+    if (deactivated.rows.length > 0) {
+      console.log(`[Cron] Marked ${deactivated.rows.length} client(s) as inactive`);
+    }
+
+    // 2. paid → inactive if no activity for 60 days (churn detection)
+    const churnedPaid = await db.query(
+      `UPDATE clients SET status='inactive'
+       WHERE status='paid'
+         AND last_active_at < NOW() - INTERVAL '60 days'
+       RETURNING id`
+    );
+    if (churnedPaid.rows.length > 0) {
+      console.log(`[Cron] Churned ${churnedPaid.rows.length} paid client(s) to inactive`);
+    }
+
+    // 3. Schedule re-engagement for newly-churned clients (not already pending)
+    const needsReEngagement = await db.query(
+      `SELECT id FROM clients
+       WHERE status = 'inactive'
+         AND last_active_at < NOW() - INTERVAL '30 days'
+         AND id NOT IN (
+           SELECT client_id FROM follow_ups
+           WHERE type = 're_engagement' AND status = 'pending'
+         )
+       LIMIT 50`
+    );
+    for (const c of needsReEngagement.rows) {
+      await db.query(
+        `INSERT INTO follow_ups (client_id, type, scheduled_at)
+         VALUES ($1, 're_engagement', NOW() + INTERVAL '2 hours')`,
+        [c.id]
+      ).catch(() => {});
+    }
+    if (needsReEngagement.rows.length > 0) {
+      console.log(`[Cron] Scheduled ${needsReEngagement.rows.length} re-engagement follow-ups`);
+    }
+  } catch (err) {
+    console.error('[Cron] Segment update error:', err.message);
+  }
+}
+
 function initCronJobs() {
   cron.schedule('0 * * * *',       runFollowUps);              // every hour
   cron.schedule('*/15 * * * *',    runAppointmentReminders);   // every 15 min
   cron.schedule('*/15 * * * *',    runScheduledBroadcasts);    // every 15 min
   cron.schedule('0 */6 * * *',     scheduleInactiveAlerts);    // every 6 hours
+  cron.schedule('0 */6 * * *',     updateClientSegments);      // every 6 hours (segment refresh)
   cron.schedule('0 9 * * 1',       sendWeeklySummary);         // every Monday 9am
   cron.schedule('0 0 * * *',       autoResolveOldAlerts);      // daily midnight
   console.log('[Cron] All jobs initialized');
 }
 
-module.exports = { initCronJobs };
+module.exports = { initCronJobs, updateClientSegments };

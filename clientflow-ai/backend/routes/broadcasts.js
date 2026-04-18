@@ -62,4 +62,31 @@ router.post('/:id/send', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Broadcast Stats: delivery count + reply count ───────────────────────────
+router.get('/:id/stats', async (req, res) => {
+  try {
+    const broadcast = (await db.query(`SELECT id, sent_at, total_sent FROM broadcasts WHERE id=$1`, [req.params.id])).rows[0];
+    if (!broadcast) return res.status(404).json({ error: 'Not found' });
+    if (!broadcast.sent_at) return res.json({ delivered: 0, replies: 0, replyRate: '0.0' });
+
+    const [delivered, replies] = await Promise.all([
+      db.query(`SELECT COUNT(*) FROM broadcast_recipients WHERE broadcast_id=$1 AND delivered=true`, [broadcast.id]),
+      // Count inbound messages from recipients after the broadcast was sent
+      db.query(`
+        SELECT COUNT(DISTINCT br.client_id) FROM broadcast_recipients br
+        JOIN messages m ON m.client_id = br.client_id
+        WHERE br.broadcast_id=$1
+          AND m.direction = 'inbound'
+          AND m.created_at > $2
+      `, [broadcast.id, broadcast.sent_at]),
+    ]);
+
+    const deliveredN = parseInt(delivered.rows[0].count);
+    const repliesN   = parseInt(replies.rows[0].count);
+    const replyRate  = deliveredN > 0 ? ((repliesN / deliveredN) * 100).toFixed(1) : '0.0';
+
+    res.json({ delivered: deliveredN, replies: repliesN, replyRate });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;
