@@ -30,6 +30,9 @@ app.use(requestLogger);
 // ─── Serve uploads (static files) ───────────────────────────────────────────
 app.use('/uploads', express.static('uploads'));
 
+// ─── Rate Limiting ───────────────────────────────────────────────────────────
+app.use('/api', apiLimiter);
+
 // ─── File Upload (authenticated, type-validated) ────────────────────────────
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
 const upload = multer({
@@ -48,9 +51,6 @@ app.post('/api/upload', authMiddleware, upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   res.json({ url: `/uploads/${req.file.filename}` });
 });
-
-// ─── Rate Limiting ───────────────────────────────────────────────────────────
-app.use('/api', apiLimiter);
 
 // ─── Routes ─────────────────────────────────────────────────────────────────────
 const webhookRouter     = require('./routes/webhook');
