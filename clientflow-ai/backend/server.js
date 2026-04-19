@@ -1,29 +1,69 @@
 require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
-const http = require('http');
+const cors    = require('cors');
+const http    = require('http');
 const { Server } = require('socket.io');
-const multer = require('multer');
+const multer  = require('multer');
+const swaggerUi = require('swagger-ui-express');
 
-const app = express();
+const app    = express();
 const server = http.createServer(app);
-const io = new Server(server, {
+const io     = new Server(server, {
   cors: { origin: process.env.FRONTEND_URL, credentials: true }
 });
-
 app.set('io', io);
 
-// ─── Middleware ──────────────────────────────────────────────────────────────────
-app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
-app.use(express.json());
-app.use('/uploads', express.static('uploads'));
+// ─── Import services ─────────────────────────────────────────────────────────
+const cache   = require('./services/cacheService');
+const logger  = require('./services/loggerService');
 
-const upload = multer({ dest: 'uploads/' });
+// ─── Import middleware ────────────────────────────────────────────────────────
+const { secureHeaders, sanitizeInput, payloadSizeGuard } = require('./middleware/security');
+const requestLogger  = require('./middleware/requestLogger');
+const subdomainTenant = require('./middleware/subdomainTenant');
+const { errorHandler } = require('./middleware/errorHandler');
+const { apiLimiter }   = require('./middleware/rateLimiter');
+const swaggerSpec      = require('./swagger');
+
+// ─── Connect to Redis ────────────────────────────────────────────────────────
+cache.connect().catch(() => logger.warn('Redis connection failed — caching disabled'));
+
+// ─── Security Middleware ─────────────────────────────────────────────────────
+app.use(secureHeaders);
+app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
+app.use(express.json({ limit: '1mb' }));
+app.use(payloadSizeGuard);
+app.use(sanitizeInput);
+app.use(requestLogger);
+app.use(subdomainTenant);
+
+// ─── Static Uploads ──────────────────────────────────────────────────────────
+app.use('/uploads', express.static('uploads'));
+const upload = multer({ dest: 'uploads/', limits: { fileSize: 10 * 1024 * 1024 } });
 app.post('/api/upload', upload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   res.json({ url: `/uploads/${req.file.filename}` });
 });
 
-// ─── Routes ─────────────────────────────────────────────────────────────────────
+// ─── API Docs (PROMPT 116) ───────────────────────────────────────────────────
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customSiteTitle: 'ClientFlow AI API Docs',
+  customCss:       '.swagger-ui .topbar { background-color: #10B981; }',
+}));
+app.get('/api/docs.json', (_req, res) => res.json(swaggerSpec));
+
+// ─── Health Check ─────────────────────────────────────────────────────────────
+app.get('/health', (_req, res) => res.json({
+  status:    'ok',
+  timestamp: new Date().toISOString(),
+  redis:     cache.isConnected(),
+  version:   '1.0.0',
+}));
+
+// ─── API Rate Limiter (applies to all /api routes) ───────────────────────────
+app.use('/api', apiLimiter);
+
+// ─── Routes ──────────────────────────────────────────────────────────────────
 const webhookRouter     = require('./routes/webhook');
 const authRouter        = require('./routes/auth');
 const clientRouter      = require('./routes/clients');
@@ -39,33 +79,54 @@ const analyticsRouter   = require('./routes/analytics');
 const settingsRouter    = require('./routes/settings');
 const followupRouter    = require('./routes/followups');
 const aiRouter          = require('./routes/ai');
+const sessionsRouter    = require('./routes/sessions');
+const whitelabelRouter  = require('./routes/whitelabel');
+const experimentsRouter = require('./routes/experiments');
+const usageRouter       = require('./routes/usage');
 
-app.use('/webhook',          webhookRouter);
-app.use('/api/auth',         authRouter);
-app.use('/api/clients',      clientRouter);
-app.use('/api/payments',     paymentRouter);
-app.use('/api/services',     serviceRouter);
-app.use('/api/alerts',       alertRouter);
-app.use('/api/reviews',      reviewRouter);
-app.use('/api/broadcasts',   broadcastRouter);
-app.use('/api/templates',    templateRouter);
-app.use('/api/appointments', appointmentRouter);
-app.use('/api/referrals',    referralRouter);
-app.use('/api/analytics',    analyticsRouter);
-app.use('/api/settings',     settingsRouter);
-app.use('/api/followups',    followupRouter);
-app.use('/api/ai',           aiRouter);
+// ─── PROMPT 115: API Versioning — mount under both /api/v1 and /api (legacy) ─
+const mountRoutes = (base) => {
+  app.use(`${base}/webhook`,      webhookRouter);
+  app.use(`${base}/auth`,         authRouter);
+  app.use(`${base}/clients`,      clientRouter);
+  app.use(`${base}/payments`,     paymentRouter);
+  app.use(`${base}/services`,     serviceRouter);
+  app.use(`${base}/alerts`,       alertRouter);
+  app.use(`${base}/reviews`,      reviewRouter);
+  app.use(`${base}/broadcasts`,   broadcastRouter);
+  app.use(`${base}/templates`,    templateRouter);
+  app.use(`${base}/appointments`, appointmentRouter);
+  app.use(`${base}/referrals`,    referralRouter);
+  app.use(`${base}/analytics`,    analyticsRouter);
+  app.use(`${base}/settings`,     settingsRouter);
+  app.use(`${base}/followups`,    followupRouter);
+  app.use(`${base}/ai`,           aiRouter);
+  app.use(`${base}/sessions`,     sessionsRouter);
+  app.use(`${base}/experiments`,  experimentsRouter);
+  app.use(`${base}/usage`,        usageRouter);
+  app.use(`${base}`,              whitelabelRouter);  // /branding and /domains
+};
 
-// ─── Socket.io ───────────────────────────────────────────────────────────────────
+mountRoutes('/api/v1');   // current version
+mountRoutes('/api');      // legacy / backward-compatible
+
+// API version header
+app.use('/api/v1', (_req, res, next) => { res.setHeader('API-Version', 'v1'); next(); });
+
+// ─── Socket.io ───────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
-  console.log('[Socket] Client connected:', socket.id);
-  socket.on('disconnect', () => console.log('[Socket] Client disconnected'));
+  logger.info('Socket connected', { id: socket.id });
+  socket.on('join-org', (orgId) => socket.join(`org:${orgId}`));
+  socket.on('disconnect', () => logger.debug('Socket disconnected', { id: socket.id }));
 });
 
-// ─── Cron Jobs ───────────────────────────────────────────────────────────────────
+// ─── Cron Jobs ───────────────────────────────────────────────────────────────
 const { initCronJobs } = require('./services/cronService');
 initCronJobs();
 
-// ─── Start ───────────────────────────────────────────────────────────────────────
+// ─── Global Error Handler (must be last middleware) ──────────────────────────
+app.use(errorHandler);
+
+// ─── Start ───────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log(`🚀 ClientFlow AI running on port ${PORT}`));
+server.listen(PORT, () => logger.info(`ClientFlow AI running on port ${PORT}`, { port: PORT }));

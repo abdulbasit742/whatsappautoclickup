@@ -1,7 +1,7 @@
 {
   "name": "clientflow-ai-backend",
-  "version": "1.0.0",
-  "description": "ClientFlow AI — WhatsApp Business Automation Backend",
+  "version": "2.0.0",
+  "description": "ClientFlow AI — Multi-Tenant WhatsApp Business Automation Backend",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -17,7 +17,10 @@
     "multer": "^1.4.5-lts.1",
     "node-cron": "^3.0.3",
     "pg": "^8.11.3",
+    "redis": "^4.6.10",
     "socket.io": "^4.6.1",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.0",
     "uuid": "^9.0.0"
   },
   "devDependencies": {
