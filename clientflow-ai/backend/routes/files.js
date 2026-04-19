@@ -26,19 +26,22 @@ const upload = multer({
 router.use(auth);
 
 // ─── Upload attachment ────────────────────────────────────────
-router.post('/upload', upload.single('file'), async (req, res) => {
-  try {
-    const { entity_type, entity_id } = req.body;
-    const file = req.file;
-    if (!file) return res.status(400).json({ error: 'No file uploaded' });
-    const url = `/uploads/${file.filename}`;
-    const r = await db.query(
-      `INSERT INTO attachments (org_id, entity_type, entity_id, filename, original_name, mime_type, file_size, url, uploaded_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [req.owner.org_id, entity_type, entity_id, file.filename, file.originalname, file.mimetype, file.size, url, req.owner.id || null]
-    );
-    res.status(201).json(r.rows[0]);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+router.post('/upload', (req, res) => {
+  upload.single('file')(req, res, async (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    try {
+      const { entity_type, entity_id } = req.body;
+      const file = req.file;
+      if (!file) return res.status(400).json({ error: 'No file uploaded' });
+      const url = `/uploads/${file.filename}`;
+      const r = await db.query(
+        `INSERT INTO attachments (org_id, entity_type, entity_id, filename, original_name, mime_type, file_size, url, uploaded_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+        [req.owner.org_id, entity_type, entity_id, file.filename, file.originalname, file.mimetype, file.size, url, req.owner.id || null]
+      );
+      res.status(201).json(r.rows[0]);
+    } catch (dbErr) { res.status(500).json({ error: dbErr.message }); }
+  });
 });
 
 // ─── List attachments for entity ─────────────────────────────

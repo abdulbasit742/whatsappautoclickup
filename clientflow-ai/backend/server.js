@@ -41,8 +41,12 @@ app.use('/api/auth', authLimiter);
 app.use('/api', apiLimiter);
 
 const upload = multer({ dest: 'uploads/' });
-app.post('/api/upload', upload.single('file'), (req, res) => {
-  res.json({ url: `/uploads/${req.file.filename}` });
+app.post('/api/upload', (req, res) => {
+  upload.single('file')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    if (!req.file) return res.status(400).json({ error: 'No file provided' });
+    res.json({ url: `/uploads/${req.file.filename}` });
+  });
 });
 
 // ─── Routes ─────────────────────────────────────────────────────────────────────
