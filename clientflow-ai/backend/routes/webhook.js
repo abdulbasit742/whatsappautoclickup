@@ -6,11 +6,14 @@ const { sendText } = require('../services/whatsappService');
 
 // ─── Webhook Verification ────────────────────────────────────────────────────────
 router.get('/', (req, res) => {
-  const mode = req.query['hub.mode'];
-  const token = req.query['hub.verify_token'];
+  const mode      = req.query['hub.mode'];
+  const token     = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
   if (mode === 'subscribe' && token === process.env.WHATSAPP_VERIFY_TOKEN) {
-    return res.status(200).send(challenge);
+    // Validate challenge is a numeric string before reflecting it back (prevent XSS)
+    const safeChallenge = /^\d{1,20}$/.test(challenge) ? challenge : '';
+    res.setHeader('Content-Type', 'text/plain');
+    return res.status(200).send(safeChallenge);
   }
   res.sendStatus(403);
 });
@@ -167,14 +170,16 @@ async function handlePaymentInstructions(client, to) {
 }
 
 async function handleReview(client, to, rating) {
-  const sentiment = rating >= 4 ? 'positive' : rating === 3 ? 'neutral' : 'negative';
+  // Clamp rating to 1-5 to prevent resource exhaustion from .repeat()
+  const clampedRating = Math.min(5, Math.max(1, parseInt(rating, 10) || 1));
+  const sentiment = clampedRating >= 4 ? 'positive' : clampedRating === 3 ? 'neutral' : 'negative';
   await db.query(
     `INSERT INTO reviews (client_id, rating, sentiment) VALUES ($1,$2,$3)`,
-    [client.id, rating, sentiment]
+    [client.id, clampedRating, sentiment]
   );
-  const stars = '⭐'.repeat(rating);
+  const stars = '⭐'.repeat(clampedRating);
   await sendText(to, `${stars} Thank you for your rating! Your feedback means a lot to us. 🙏`);
-  if (rating >= 4) {
+  if (clampedRating >= 4) {
     await sendText(to, `We're so glad you had a great experience! Would you like to try any of our other services? Type *pricing* to see options. 🚀`);
   }
 }

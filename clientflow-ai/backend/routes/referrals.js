@@ -2,9 +2,11 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
+const { apiLimiter } = require('../middleware/rateLimiter');
 const { sendText } = require('../services/whatsappService');
 
 router.use(auth);
+router.use(apiLimiter);
 
 router.get('/leaderboard', async (req, res) => {
   try {

@@ -1,10 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
+const { aiLimiter } = require('../middleware/rateLimiter');
 const { generateAIResponse } = require('../services/aiService');
 const db = require('../db');
 
 router.use(auth);
+router.use(aiLimiter);
 
 // ─── AI Broadcast Writer ──────────────────────────────────────────────────────
 router.post('/write-broadcast', async (req, res) => {

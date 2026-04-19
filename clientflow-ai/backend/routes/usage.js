@@ -6,11 +6,13 @@
 const express = require('express');
 const router  = express.Router();
 const auth    = require('../middleware/auth');
+const { apiLimiter } = require('../middleware/rateLimiter');
 const { requireRole } = require('../middleware/orgIsolation');
 const featureTracker = require('../services/featureTracker');
 const { asyncHandler } = require('../middleware/errorHandler');
 
 router.use(auth);
+router.use(apiLimiter);
 
 /** GET /api/usage/monthly — Monthly feature usage for current org */
 router.get('/monthly', asyncHandler(async (req, res) => {

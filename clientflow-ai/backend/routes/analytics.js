@@ -2,8 +2,10 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
+const { apiLimiter } = require('../middleware/rateLimiter');
 
 router.use(auth);
+router.use(apiLimiter);
 
 router.get('/dashboard', async (req, res) => {
   try {

@@ -5,11 +5,13 @@
 const express = require('express');
 const router  = express.Router();
 const auth    = require('../middleware/auth');
+const { apiLimiter } = require('../middleware/rateLimiter');
 const { requireRole } = require('../middleware/orgIsolation');
 const abTestService = require('../services/abTestService');
 const { asyncHandler, ValidationError } = require('../middleware/errorHandler');
 
 router.use(auth);
+router.use(apiLimiter);
 
 /** GET /api/experiments — List all experiments */
 router.get('/', asyncHandler(async (req, res) => {

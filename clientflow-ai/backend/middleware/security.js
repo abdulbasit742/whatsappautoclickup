@@ -48,8 +48,8 @@ function sanitizeInput(req, _res, next) {
 function sanitizeObject(obj, depth = 0) {
   if (depth > 10) return obj; // prevent deep recursion
   if (typeof obj === 'string') {
-    // Remove null bytes (SQL injection prevention)
-    return obj.replace(/\0/g, '').trim();
+    // Remove null bytes (SQL injection prevention) and enforce max length
+    return obj.replace(/\0/g, '').trim().slice(0, 10000);
   }
   if (Array.isArray(obj)) {
     return obj.slice(0, 1000).map(item => sanitizeObject(item, depth + 1));

@@ -6,11 +6,13 @@
 const express = require('express');
 const router  = express.Router();
 const auth    = require('../middleware/auth');
+const { apiLimiter } = require('../middleware/rateLimiter');
 const { requireRole } = require('../middleware/orgIsolation');
 const whitelabelService = require('../services/whitelabelService');
 const { asyncHandler, ValidationError } = require('../middleware/errorHandler');
 
 router.use(auth);
+router.use(apiLimiter);
 
 // ─── Branding ────────────────────────────────────────────────────────────────
 

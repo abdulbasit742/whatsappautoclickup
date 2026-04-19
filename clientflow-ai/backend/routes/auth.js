@@ -96,7 +96,7 @@ router.post('/login', loginLimiter, asyncHandler(async (req, res) => {
  * POST /api/auth/register-org
  * Create a new organization + owner user.
  */
-router.post('/register-org', asyncHandler(async (req, res) => {
+router.post('/register-org', loginLimiter, asyncHandler(async (req, res) => {
   const { orgName, orgSlug, email, password, name } = req.body;
   if (!orgName || !orgSlug || !email || !password) {
     throw new ValidationError('orgName, orgSlug, email, and password are required');

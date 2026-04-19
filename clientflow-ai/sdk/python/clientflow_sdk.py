@@ -45,7 +45,7 @@ class ClientFlowSDK:
 
     def __init__(
         self,
-        base_url: str = "http://localhost:5000/api/v1",
+        base_url: str = "https://api.clientflow.ai/api/v1",
         token: Optional[str] = None,
         timeout: int = 30,
     ):

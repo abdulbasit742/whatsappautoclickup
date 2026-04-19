@@ -6,11 +6,13 @@
 const express = require('express');
 const router  = express.Router();
 const auth    = require('../middleware/auth');
+const { apiLimiter } = require('../middleware/rateLimiter');
 const sessionService = require('../services/sessionService');
 const { asyncHandler } = require('../middleware/errorHandler');
 
 // All session routes require authentication
 router.use(auth);
+router.use(apiLimiter);
 
 /** GET /api/sessions — List all active sessions for current user */
 router.get('/', asyncHandler(async (req, res) => {
