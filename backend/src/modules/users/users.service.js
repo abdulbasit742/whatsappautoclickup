@@ -1,4 +1,5 @@
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 const { query } = require('../../config/database');
 const { parsePagination, paginationMeta } = require('../../shared/utils/pagination');
 
@@ -41,7 +42,7 @@ async function inviteUser(orgId, { email, name, role = 'agent', password }, invi
     throw err;
   }
 
-  const tempPassword = password || Math.random().toString(36).slice(-8) + 'A1!';
+  const tempPassword = password || crypto.randomBytes(10).toString('hex') + 'A1!';
   const passwordHash = await bcrypt.hash(tempPassword, 12);
 
   const result = await query(
