@@ -37,8 +37,35 @@ app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 app.use('/api', apiLimiter);
 
-const upload = multer({ dest: 'uploads/' });
+const ALLOWED_MIME_TYPES = new Set([
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+  'application/pdf',
+  'audio/mpeg', 'audio/ogg', 'audio/wav',
+  'video/mp4',
+]);
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, 'uploads/'),
+  filename: (_req, file, cb) => {
+    const ext = file.originalname.split('.').pop();
+    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_MIME_TYPES.has(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`File type not allowed: ${file.mimetype}`));
+    }
+  },
+});
+
 app.post('/api/upload', upload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   res.json({ url: `/uploads/${req.file.filename}` });
 });
 
@@ -90,6 +117,18 @@ app.use('/api/api-keys',     apiKeysRouter);
 app.use('/api/integrations', integrationsRouter);
 app.use('/api/billing',      billingRouter);
 app.use('/api/campaigns',    campaignsRouter);
+
+// ─── Global Error Handler ────────────────────────────────────────────────────────
+app.use((err, req, res, next) => {
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({ error: 'File too large. Maximum size is 10 MB.' });
+  }
+  if (err.message?.startsWith('File type not allowed')) {
+    return res.status(415).json({ error: err.message });
+  }
+  console.error('[Error]', err.message);
+  res.status(500).json({ error: 'Internal server error' });
+});
 
 // ─── Socket.io ───────────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
