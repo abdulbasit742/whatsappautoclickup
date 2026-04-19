@@ -8,8 +8,11 @@ router.use(auth);
 // ─── Global advanced search ───────────────────────────────────
 router.get('/', async (req, res) => {
   try {
-    const { q, types, limit = 20 } = req.query;
-    if (!q || q.length < 2) return res.json({ results: [] });
+    // Ensure q and types are always strings, not arrays (type confusion guard)
+    const q     = Array.isArray(req.query.q)     ? req.query.q[0]     : req.query.q;
+    const types = Array.isArray(req.query.types)  ? req.query.types[0] : req.query.types;
+    const limit = parseInt(req.query.limit) || 20;
+    if (!q || typeof q !== 'string' || q.length < 2) return res.json({ results: [] });
     const like = `%${q}%`;
     const searchTypes = types ? types.split(',') : ['contacts','conversations','issues'];
     const results = {};
