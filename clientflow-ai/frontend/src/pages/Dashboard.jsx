@@ -22,6 +22,13 @@ const mockRevenue = [
   { day: 'Sun', revenue: 88000 },
 ];
 
+const ACTIVITY_COLORS = {
+  emerald: 'w-7 h-7 rounded-full bg-emerald-500/20 flex items-center justify-center text-xs font-bold text-emerald-400 shrink-0',
+  blue:    'w-7 h-7 rounded-full bg-blue-500/20 flex items-center justify-center text-xs font-bold text-blue-400 shrink-0',
+  purple:  'w-7 h-7 rounded-full bg-purple-500/20 flex items-center justify-center text-xs font-bold text-purple-400 shrink-0',
+  yellow:  'w-7 h-7 rounded-full bg-yellow-500/20 flex items-center justify-center text-xs font-bold text-yellow-400 shrink-0',
+};
+
 const mockActivity = [
   { id: 1, initials: 'AB', name: 'Abdul Basit',  action: 'Closed deal with Sara Ahmed',          time: '2m ago',  color: 'emerald' },
   { id: 2, initials: 'ZK', name: 'Zara Khan',    action: 'Sent follow-up to 12 clients',          time: '15m ago', color: 'blue' },
@@ -159,7 +166,7 @@ export default function Dashboard() {
           <div className="space-y-3">
             {mockActivity.map(a => (
               <div key={a.id} className="flex items-start gap-3">
-                <div className={`w-7 h-7 rounded-full bg-${a.color}-500/20 flex items-center justify-center text-xs font-bold text-${a.color}-400 shrink-0`}>
+                <div className={ACTIVITY_COLORS[a.color] || ACTIVITY_COLORS.emerald}>
                   {a.initials}
                 </div>
                 <div className="min-w-0 flex-1">

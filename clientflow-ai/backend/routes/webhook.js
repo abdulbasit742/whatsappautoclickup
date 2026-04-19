@@ -10,7 +10,9 @@ router.get('/', (req, res) => {
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
   if (mode === 'subscribe' && token === process.env.WHATSAPP_VERIFY_TOKEN) {
-    return res.status(200).send(challenge);
+    // Only reflect alphanumeric challenge values to prevent XSS
+    const safe = String(challenge).replace(/[^\w-]/g, '');
+    return res.status(200).send(safe);
   }
   res.sendStatus(403);
 });
@@ -172,7 +174,8 @@ async function handleReview(client, to, rating) {
     `INSERT INTO reviews (client_id, rating, sentiment) VALUES ($1,$2,$3)`,
     [client.id, rating, sentiment]
   );
-  const stars = '⭐'.repeat(rating);
+  const safeRating = Math.max(1, Math.min(5, Number(rating) || 1));
+  const stars = '⭐'.repeat(safeRating);
   await sendText(to, `${stars} Thank you for your rating! Your feedback means a lot to us. 🙏`);
   if (rating >= 4) {
     await sendText(to, `We're so glad you had a great experience! Would you like to try any of our other services? Type *pricing* to see options. 🚀`);
