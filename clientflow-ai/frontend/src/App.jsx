@@ -17,6 +17,25 @@ import Templates from './pages/Templates';
 import Appointments from './pages/Appointments';
 import Referrals from './pages/Referrals';
 import Settings from './pages/Settings';
+// v2 pages
+import UnifiedInbox from './pages/UnifiedInbox';
+import ActivityFeed from './pages/ActivityFeed';
+import TeamPerformance from './pages/TeamPerformance';
+import Revenue from './pages/Revenue';
+import Pipeline from './pages/Pipeline';
+import AssignmentRules from './pages/AssignmentRules';
+import AutoTagging from './pages/AutoTagging';
+import DataImport from './pages/DataImport';
+import DataExport from './pages/DataExport';
+import DataBackup from './pages/DataBackup';
+import DataPrivacy from './pages/DataPrivacy';
+import OrgSettings from './pages/OrgSettings';
+import DashboardBuilder from './pages/DashboardBuilder';
+import FilterBuilder from './pages/FilterBuilder';
+import RuleEngine from './pages/RuleEngine';
+import AITraining from './pages/AITraining';
+import AIFeedback from './pages/AIFeedback';
+import SystemHealth from './pages/SystemHealth';
 
 function Layout({ children }) {
   return (
@@ -59,6 +78,25 @@ export default function App() {
           <Route path="/appointments" element={<Protected><Appointments /></Protected>} />
           <Route path="/referrals"   element={<Protected><Referrals /></Protected>} />
           <Route path="/settings"    element={<Protected><Settings /></Protected>} />
+          {/* v2 routes */}
+          <Route path="/unified-inbox"   element={<Protected><UnifiedInbox /></Protected>} />
+          <Route path="/activity"        element={<Protected><ActivityFeed /></Protected>} />
+          <Route path="/team"            element={<Protected><TeamPerformance /></Protected>} />
+          <Route path="/revenue"         element={<Protected><Revenue /></Protected>} />
+          <Route path="/pipeline"        element={<Protected><Pipeline /></Protected>} />
+          <Route path="/assignments"     element={<Protected><AssignmentRules /></Protected>} />
+          <Route path="/auto-tagging"    element={<Protected><AutoTagging /></Protected>} />
+          <Route path="/import"          element={<Protected><DataImport /></Protected>} />
+          <Route path="/export"          element={<Protected><DataExport /></Protected>} />
+          <Route path="/backup"          element={<Protected><DataBackup /></Protected>} />
+          <Route path="/privacy"         element={<Protected><DataPrivacy /></Protected>} />
+          <Route path="/org-settings"    element={<Protected><OrgSettings /></Protected>} />
+          <Route path="/dashboard-builder" element={<Protected><DashboardBuilder /></Protected>} />
+          <Route path="/filter-builder"  element={<Protected><FilterBuilder /></Protected>} />
+          <Route path="/rules"           element={<Protected><RuleEngine /></Protected>} />
+          <Route path="/ai-training"     element={<Protected><AITraining /></Protected>} />
+          <Route path="/ai-feedback"     element={<Protected><AIFeedback /></Protected>} />
+          <Route path="/system-health"   element={<Protected><SystemHealth /></Protected>} />
         </Routes>
       </BrowserRouter>
       </ToastProvider>
