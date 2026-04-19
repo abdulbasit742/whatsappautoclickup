@@ -176,7 +176,8 @@ async function handleReview(client, to, rating) {
     `INSERT INTO reviews (client_id, rating, sentiment) VALUES ($1,$2,$3)`,
     [client.id, rating, sentiment]
   );
-  const stars = '⭐'.repeat(Math.min(Math.max(rating, 1), 5));
+  const STARS = ['', '⭐', '⭐⭐', '⭐⭐⭐', '⭐⭐⭐⭐', '⭐⭐⭐⭐⭐'];
+  const stars = STARS[rating] || '⭐';
   await sendText(to, `${stars} Thank you for your rating! Your feedback means a lot to us. 🙏`);
   if (rating >= 4) {
     await sendText(to, `We're so glad you had a great experience! Would you like to try any of our other services? Type *pricing* to see options. 🚀`);
