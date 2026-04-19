@@ -29,4 +29,6 @@ INSERT INTO settings (key, value) VALUES
   ('follow_up_payment_hours', '24'),
   ('follow_up_post_delivery_days', '2'),
   ('follow_up_re_engagement_days', '14'),
+  -- Note: this setting is stored for future use; current fallback order is hardcoded
+  -- in backend/services/aiService.js (PROVIDERS array)
   ('ai_provider_priority', 'claude,openai,gemini,groq');
