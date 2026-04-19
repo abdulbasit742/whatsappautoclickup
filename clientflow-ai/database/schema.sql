@@ -182,3 +182,56 @@ CREATE TABLE settings (
   value      TEXT,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ─── INTEGRATIONS ────────────────────────────────────────────────────────────────
+CREATE TABLE integrations (
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  provider_name VARCHAR(50) UNIQUE NOT NULL,
+  status        VARCHAR(20) DEFAULT 'not_connected' CHECK (status IN ('not_connected','configured','connected','disconnected','error')),
+  connected_at  TIMESTAMPTZ,
+  last_sync_at  TIMESTAMPTZ,
+  last_error    TEXT,
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_integrations_provider ON integrations(provider_name);
+CREATE INDEX idx_integrations_status   ON integrations(status);
+
+-- ─── API KEYS ────────────────────────────────────────────────────────────────────
+CREATE TABLE api_keys (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  provider_name   VARCHAR(50) NOT NULL,
+  key_name        VARCHAR(100) NOT NULL,
+  encrypted_value TEXT NOT NULL,
+  last_used_at    TIMESTAMPTZ,
+  expires_at      TIMESTAMPTZ,
+  created_by      VARCHAR(150),
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(provider_name, key_name)
+);
+CREATE INDEX idx_api_keys_provider ON api_keys(provider_name);
+
+-- ─── INTEGRATION LOGS ────────────────────────────────────────────────────────────
+CREATE TABLE integration_logs (
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  provider_name VARCHAR(50) NOT NULL,
+  event_type    VARCHAR(50) NOT NULL,
+  status        VARCHAR(20) NOT NULL CHECK (status IN ('success','error','warning')),
+  message       TEXT,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_integration_logs_provider ON integration_logs(provider_name);
+CREATE INDEX idx_integration_logs_created  ON integration_logs(created_at DESC);
+
+-- ─── OAUTH SESSIONS ──────────────────────────────────────────────────────────────
+CREATE TABLE oauth_sessions (
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  provider_name VARCHAR(50) NOT NULL,
+  state         VARCHAR(100) UNIQUE NOT NULL,
+  redirect_uri  TEXT,
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  expires_at    TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '10 minutes')
+);
+CREATE INDEX idx_oauth_sessions_state    ON oauth_sessions(state);
+CREATE INDEX idx_oauth_sessions_provider ON oauth_sessions(provider_name);

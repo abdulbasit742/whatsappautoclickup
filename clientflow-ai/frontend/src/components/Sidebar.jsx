@@ -2,23 +2,24 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard, Users, MessageSquare, CreditCard, BarChart2,
-  Star, Megaphone, Package, FileText, Calendar, Link, Settings, LogOut, Zap, Clock
+  Star, Megaphone, Package, FileText, Calendar, Link, Settings, LogOut, Zap, Clock, Plug
 } from 'lucide-react';
 
 const links = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/clients', icon: Users, label: 'Clients' },
-  { to: '/inbox', icon: MessageSquare, label: 'Inbox' },
-  { to: '/payments', icon: CreditCard, label: 'Payments' },
-  { to: '/analytics', icon: BarChart2, label: 'Analytics' },
-  { to: '/reviews', icon: Star, label: 'Reviews' },
-  { to: '/broadcasts', icon: Megaphone, label: 'Broadcasts' },
-  { to: '/followups', icon: Clock, label: 'Follow-ups' },
-  { to: '/services', icon: Package, label: 'Services' },
-  { to: '/templates', icon: FileText, label: 'Templates' },
-  { to: '/appointments', icon: Calendar, label: 'Appointments' },
-  { to: '/referrals', icon: Link, label: 'Referrals' },
-  { to: '/settings', icon: Settings, label: 'Settings' },
+  { to: '/',              icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/clients',       icon: Users,           label: 'Clients' },
+  { to: '/inbox',         icon: MessageSquare,   label: 'Inbox' },
+  { to: '/payments',      icon: CreditCard,      label: 'Payments' },
+  { to: '/analytics',     icon: BarChart2,       label: 'Analytics' },
+  { to: '/reviews',       icon: Star,            label: 'Reviews' },
+  { to: '/broadcasts',    icon: Megaphone,       label: 'Broadcasts' },
+  { to: '/followups',     icon: Clock,           label: 'Follow-ups' },
+  { to: '/services',      icon: Package,         label: 'Services' },
+  { to: '/templates',     icon: FileText,        label: 'Templates' },
+  { to: '/appointments',  icon: Calendar,        label: 'Appointments' },
+  { to: '/referrals',     icon: Link,            label: 'Referrals' },
+  { to: '/integrations',  icon: Plug,            label: 'Integrations' },
+  { to: '/settings',      icon: Settings,        label: 'Settings' },
 ];
 
 export default function Sidebar() {
