@@ -7,6 +7,8 @@ const path = require('path');
 
 router.use(auth);
 
+const ALLOWED_ENTITIES = ['clients', 'payments', 'messages', 'analytics'];
+
 function toCSV(rows) {
   if (!rows.length) return '';
   const headers = Object.keys(rows[0]);
@@ -20,14 +22,19 @@ function toCSV(rows) {
   return lines.join('\n');
 }
 
-// POST /api/export — create export job and generate file
+  // POST /api/export — create export job and generate file
 router.post('/', async (req, res) => {
   try {
-    const { entity_type, filters = {}, format = 'csv' } = req.body;
+    const { format = 'csv' } = req.body;
+    const entity_type = req.body.entity_type;
+
+    if (!ALLOWED_ENTITIES.includes(entity_type)) {
+      return res.status(400).json({ error: 'Invalid entity_type' });
+    }
 
     const job = (await db.query(
       `INSERT INTO export_jobs (entity_type, filters, format, status) VALUES ($1,$2,$3,'processing') RETURNING *`,
-      [entity_type, JSON.stringify(filters), format]
+      [entity_type, JSON.stringify(req.body.filters || {}), format]
     )).rows[0];
 
     let rows = [];

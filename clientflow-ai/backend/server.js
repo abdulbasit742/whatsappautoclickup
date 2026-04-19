@@ -4,6 +4,7 @@ const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
 const multer = require('multer');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const server = http.createServer(app);
@@ -12,6 +13,32 @@ const io = new Server(server, {
 });
 
 app.set('io', io);
+
+// ─── Rate Limiting ───────────────────────────────────────────────────────────
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 500,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+});
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts, please try again later.' },
+});
+const fileLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'File operation limit reached, please try again later.' },
+});
+
+app.use('/api', globalLimiter);
+app.use('/api/auth', authLimiter);
 
 // ─── Middleware ──────────────────────────────────────────────────────────────────
 app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
@@ -81,9 +108,9 @@ app.use('/api/team',             teamRouter);
 app.use('/api/pipeline',         pipelineRouter);
 app.use('/api/assignments',      assignmentsRouter);
 app.use('/api/tags',             tagsRouter);
-app.use('/api/import',           importRouter);
-app.use('/api/export',           exportRouter);
-app.use('/api/backup',           backupRouter);
+app.use('/api/import',           fileLimiter, importRouter);
+app.use('/api/export',           fileLimiter, exportRouter);
+app.use('/api/backup',           fileLimiter, backupRouter);
 app.use('/api/privacy',          privacyRouter);
 app.use('/api/org',              orgRouter);
 app.use('/api/dashboard-builder', dashboardBuilderRouter);

@@ -48,7 +48,15 @@ router.post('/:id/map', async (req, res) => {
     const job = (await db.query(`SELECT * FROM import_jobs WHERE id=$1`, [req.params.id])).rows[0];
     if (!job) return res.status(404).json({ error: 'Job not found' });
 
-    const content = fs.readFileSync(job.file_url.replace('/uploads', 'uploads'), 'utf8');
+    // Resolve path safely — ensure it stays within the uploads/imports directory
+    const uploadsBase = path.resolve('uploads/imports');
+    const storedFilename = path.basename(job.file_url || '');
+    const safeFilePath = path.join(uploadsBase, storedFilename);
+    if (!safeFilePath.startsWith(uploadsBase + path.sep) && safeFilePath !== uploadsBase) {
+      return res.status(400).json({ error: 'Invalid file path' });
+    }
+
+    const content = fs.readFileSync(safeFilePath, 'utf8');
     const lines = content.split('\n').filter(l => l.trim());
     const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
 
