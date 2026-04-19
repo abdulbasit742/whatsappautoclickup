@@ -88,4 +88,87 @@ After delivering a service, suggest a related next service. No markdown, no aste
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── AI Metrics ──────────────────────────────────────────────────────────────
+router.get('/metrics', async (req, res) => {
+  try {
+    const [total, today, failed, groqCalls, latency, costEst] = await Promise.all([
+      db.query(`SELECT COUNT(*) FROM ai_logs`),
+      db.query(`SELECT COUNT(*) FROM ai_logs WHERE created_at > NOW() - INTERVAL '1 day'`),
+      db.query(`SELECT COUNT(*) FROM ai_logs WHERE success=false`),
+      db.query(`SELECT COUNT(*) FROM ai_logs WHERE provider='groq' AND success=true`),
+      db.query(`SELECT COALESCE(AVG(latency_ms),0) as avg FROM ai_logs WHERE success=true AND created_at > NOW() - INTERVAL '7 days'`),
+      db.query(`SELECT COALESCE(SUM(prompt_tokens + response_tokens),0) as tokens FROM ai_logs WHERE provider='groq' AND created_at > NOW() - INTERVAL '30 days'`),
+    ]);
+
+    const totalTokens = parseInt(costEst.rows[0].tokens);
+    const estimatedCostUSD = (totalTokens / 1000) * 0.0001;
+
+    res.json({
+      total: parseInt(total.rows[0].count),
+      today: parseInt(today.rows[0].count),
+      failed: parseInt(failed.rows[0].count),
+      groqCalls: parseInt(groqCalls.rows[0].count),
+      avgLatencyMs: Math.round(parseFloat(latency.rows[0].avg)),
+      estimatedCostUSD,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Chat Summarization ───────────────────────────────────────────────────────
+router.post('/summarize', async (req, res) => {
+  try {
+    const { clientId } = req.body;
+    if (!clientId) return res.status(400).json({ error: 'clientId required' });
+
+    const msgs = (await db.query(
+      `SELECT direction, content FROM messages WHERE client_id=$1 ORDER BY created_at DESC LIMIT 20`,
+      [clientId]
+    )).rows.reverse();
+
+    if (msgs.length === 0) return res.json({ summary: 'No messages yet.' });
+
+    const transcript = msgs.map(m => `${m.direction === 'inbound' ? 'Client' : 'Agent'}: ${m.content}`).join('\n');
+
+    const { generateAIResponse } = require('../services/aiService');
+    const result = await generateAIResponse({
+      systemPrompt: 'You are a CRM assistant. Summarize the following conversation in 2-3 sentences. Include: client sentiment, main topic, and any pending action.',
+      conversationHistory: [],
+      userMessage: transcript,
+      clientId,
+    });
+
+    res.json({ summary: result.response });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Lead Scoring ─────────────────────────────────────────────────────────────
+router.post('/score-lead', async (req, res) => {
+  try {
+    const { clientId } = req.body;
+    if (!clientId) return res.status(400).json({ error: 'clientId required' });
+
+    const client = (await db.query(`SELECT * FROM clients WHERE id=$1`, [clientId])).rows[0];
+    if (!client) return res.status(404).json({ error: 'Client not found' });
+
+    const msgCount = (await db.query(
+      `SELECT COUNT(*) FROM messages WHERE client_id=$1`, [clientId]
+    )).rows[0].count;
+    const paymentCount = (await db.query(
+      `SELECT COUNT(*) FROM payments WHERE client_id=$1 AND status='confirmed'`, [clientId]
+    )).rows[0].count;
+
+    // Simple heuristic scoring
+    let score = 10;
+    if (client.total_spent_pkr > 0) score += 40;
+    if (client.total_spent_pkr > 5000) score += 15;
+    if (parseInt(msgCount) > 5) score += 10;
+    if (parseInt(paymentCount) > 0) score += 20;
+    if (client.status === 'paid') score += 5;
+    score = Math.min(score, 100);
+
+    await db.query(`UPDATE clients SET lead_score=$1 WHERE id=$2`, [score, clientId]);
+    res.json({ score, clientId });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;
