@@ -182,3 +182,208 @@ CREATE TABLE settings (
   value      TEXT,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ─── USERS (Multi-user roles) ─────────────────────────────────────────────────
+CREATE TABLE users (
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  email        VARCHAR(150) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  name         VARCHAR(100),
+  role         VARCHAR(20) DEFAULT 'agent' CHECK (role IN ('admin','agent','viewer')),
+  is_active    BOOLEAN DEFAULT TRUE,
+  last_login   TIMESTAMPTZ,
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_users_email ON users(email);
+
+-- ─── LEADS ───────────────────────────────────────────────────────────────────
+CREATE TABLE leads (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  client_id       UUID REFERENCES clients(id) ON DELETE CASCADE,
+  title           VARCHAR(200),
+  source          VARCHAR(50) CHECK (source IN ('whatsapp','website','referral','manual','campaign','social')),
+  stage           VARCHAR(30) DEFAULT 'new' CHECK (stage IN ('new','contacted','qualified','proposal','negotiation','won','lost')),
+  value_pkr       NUMERIC(12,2),
+  lead_score      SMALLINT DEFAULT 0 CHECK (lead_score BETWEEN 0 AND 100),
+  assigned_to     UUID REFERENCES users(id) ON DELETE SET NULL,
+  follow_up_status VARCHAR(30) DEFAULT 'pending' CHECK (follow_up_status IN ('pending','in_progress','done','no_response')),
+  payment_status  VARCHAR(20) DEFAULT 'unpaid' CHECK (payment_status IN ('unpaid','partial','paid')),
+  issue_status    VARCHAR(20) DEFAULT 'none' CHECK (issue_status IN ('none','open','resolved')),
+  notes           TEXT,
+  closed_at       TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_leads_client ON leads(client_id);
+CREATE INDEX idx_leads_stage ON leads(stage);
+CREATE INDEX idx_leads_score ON leads(lead_score);
+
+-- ─── TAGS ─────────────────────────────────────────────────────────────────────
+CREATE TABLE tags (
+  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name       VARCHAR(50) UNIQUE NOT NULL,
+  color      VARCHAR(7) DEFAULT '#10b981',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE client_tags (
+  client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+  tag_id    UUID REFERENCES tags(id) ON DELETE CASCADE,
+  PRIMARY KEY (client_id, tag_id)
+);
+
+-- ─── STRUCTURED NOTES ────────────────────────────────────────────────────────
+CREATE TABLE notes (
+  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  client_id  UUID REFERENCES clients(id) ON DELETE CASCADE,
+  lead_id    UUID REFERENCES leads(id) ON DELETE CASCADE,
+  author_id  UUID REFERENCES users(id) ON DELETE SET NULL,
+  content    TEXT NOT NULL,
+  type       VARCHAR(20) DEFAULT 'general' CHECK (type IN ('general','call','meeting','email','ai_summary')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_notes_client ON notes(client_id);
+
+-- ─── API KEYS ─────────────────────────────────────────────────────────────────
+CREATE TABLE api_keys (
+  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id    UUID REFERENCES users(id) ON DELETE CASCADE,
+  name       VARCHAR(100) NOT NULL,
+  key_hash   VARCHAR(255) NOT NULL,
+  key_prefix VARCHAR(10) NOT NULL,
+  scopes     TEXT[],
+  last_used  TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ,
+  is_active  BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ─── INTEGRATIONS ────────────────────────────────────────────────────────────
+CREATE TABLE integrations (
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name        VARCHAR(50) UNIQUE NOT NULL CHECK (name IN ('gmail','google_calendar','clickup','make','stripe','paypal','razorpay')),
+  is_enabled  BOOLEAN DEFAULT FALSE,
+  config      JSONB DEFAULT '{}',
+  last_synced TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ─── PLANS & SUBSCRIPTIONS ───────────────────────────────────────────────────
+CREATE TABLE plans (
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name          VARCHAR(100) NOT NULL,
+  description   TEXT,
+  price_pkr     NUMERIC(10,2) NOT NULL,
+  price_usd     NUMERIC(10,2),
+  billing_cycle VARCHAR(20) DEFAULT 'monthly' CHECK (billing_cycle IN ('monthly','quarterly','yearly')),
+  features      JSONB DEFAULT '[]',
+  max_users     INT DEFAULT 3,
+  max_contacts  INT DEFAULT 500,
+  is_active     BOOLEAN DEFAULT TRUE,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE subscriptions (
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  plan_id       UUID REFERENCES plans(id),
+  status        VARCHAR(20) DEFAULT 'trial' CHECK (status IN ('trial','active','paused','cancelled','expired')),
+  starts_at     TIMESTAMPTZ DEFAULT NOW(),
+  expires_at    TIMESTAMPTZ,
+  trial_ends_at TIMESTAMPTZ,
+  payment_method VARCHAR(30),
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE invoices (
+  id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  subscription_id UUID REFERENCES subscriptions(id),
+  amount_pkr     NUMERIC(10,2) NOT NULL,
+  amount_usd     NUMERIC(10,2),
+  status         VARCHAR(20) DEFAULT 'unpaid' CHECK (status IN ('unpaid','paid','overdue','void')),
+  due_date       TIMESTAMPTZ,
+  paid_at        TIMESTAMPTZ,
+  pdf_url        VARCHAR(255),
+  notes          TEXT,
+  created_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ─── DRIP CAMPAIGNS ──────────────────────────────────────────────────────────
+CREATE TABLE contact_lists (
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name        VARCHAR(150) NOT NULL,
+  description TEXT,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE contact_list_members (
+  list_id   UUID REFERENCES contact_lists(id) ON DELETE CASCADE,
+  client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+  added_at  TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (list_id, client_id)
+);
+
+CREATE TABLE drip_campaigns (
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name        VARCHAR(150) NOT NULL,
+  list_id     UUID REFERENCES contact_lists(id),
+  status      VARCHAR(20) DEFAULT 'draft' CHECK (status IN ('draft','active','paused','completed')),
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE drip_steps (
+  id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  campaign_id    UUID REFERENCES drip_campaigns(id) ON DELETE CASCADE,
+  step_number    INT NOT NULL,
+  delay_hours    INT DEFAULT 24,
+  template_id    UUID REFERENCES templates(id),
+  message        TEXT,
+  created_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE drip_enrollments (
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  campaign_id   UUID REFERENCES drip_campaigns(id) ON DELETE CASCADE,
+  client_id     UUID REFERENCES clients(id) ON DELETE CASCADE,
+  current_step  INT DEFAULT 0,
+  status        VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active','paused','completed','unsubscribed')),
+  enrolled_at   TIMESTAMPTZ DEFAULT NOW(),
+  next_send_at  TIMESTAMPTZ,
+  UNIQUE(campaign_id, client_id)
+);
+
+-- ─── A/B TESTING ─────────────────────────────────────────────────────────────
+CREATE TABLE ab_tests (
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name         VARCHAR(150) NOT NULL,
+  broadcast_id UUID REFERENCES broadcasts(id),
+  variant_a    TEXT NOT NULL,
+  variant_b    TEXT NOT NULL,
+  winner       CHAR(1) CHECK (winner IN ('A','B')),
+  sent_a       INT DEFAULT 0,
+  sent_b       INT DEFAULT 0,
+  opens_a      INT DEFAULT 0,
+  opens_b      INT DEFAULT 0,
+  replies_a    INT DEFAULT 0,
+  replies_b    INT DEFAULT 0,
+  status       VARCHAR(20) DEFAULT 'running' CHECK (status IN ('running','completed','cancelled')),
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ─── WEBHOOKS ─────────────────────────────────────────────────────────────────
+CREATE TABLE webhook_endpoints (
+  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  url        VARCHAR(500) NOT NULL,
+  events     TEXT[],
+  secret     VARCHAR(100),
+  is_active  BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE webhook_logs (
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  endpoint_id UUID REFERENCES webhook_endpoints(id) ON DELETE CASCADE,
+  event       VARCHAR(100),
+  payload     JSONB,
+  response_status INT,
+  delivered   BOOLEAN DEFAULT FALSE,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);

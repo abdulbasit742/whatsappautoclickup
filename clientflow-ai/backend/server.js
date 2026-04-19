@@ -39,6 +39,14 @@ const analyticsRouter   = require('./routes/analytics');
 const settingsRouter    = require('./routes/settings');
 const followupRouter    = require('./routes/followups');
 const aiRouter          = require('./routes/ai');
+const usersRouter       = require('./routes/users');
+const leadsRouter       = require('./routes/leads');
+const tagsRouter        = require('./routes/tags');
+const notesRouter       = require('./routes/notes');
+const apiKeysRouter     = require('./routes/apikeys');
+const integrationsRouter = require('./routes/integrations');
+const billingRouter     = require('./routes/billing');
+const campaignsRouter   = require('./routes/campaigns');
 
 app.use('/webhook',          webhookRouter);
 app.use('/api/auth',         authRouter);
@@ -55,6 +63,14 @@ app.use('/api/analytics',    analyticsRouter);
 app.use('/api/settings',     settingsRouter);
 app.use('/api/followups',    followupRouter);
 app.use('/api/ai',           aiRouter);
+app.use('/api/users',        usersRouter);
+app.use('/api/leads',        leadsRouter);
+app.use('/api/tags',         tagsRouter);
+app.use('/api/notes',        notesRouter);
+app.use('/api/api-keys',     apiKeysRouter);
+app.use('/api/integrations', integrationsRouter);
+app.use('/api/billing',      billingRouter);
+app.use('/api/campaigns',    campaignsRouter);
 
 // ─── Socket.io ───────────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
