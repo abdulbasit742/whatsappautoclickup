@@ -4,6 +4,7 @@ const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
 const multer = require('multer');
+const requestLogger = require('./middleware/logger');
 
 const app = express();
 const server = http.createServer(app);
@@ -16,6 +17,7 @@ app.set('io', io);
 // ─── Middleware ──────────────────────────────────────────────────────────────────
 app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
 app.use(express.json());
+app.use(requestLogger);
 app.use('/uploads', express.static('uploads'));
 
 const upload = multer({ dest: 'uploads/' });
@@ -56,6 +58,13 @@ app.use('/api/settings',     settingsRouter);
 app.use('/api/followups',    followupRouter);
 app.use('/api/ai',           aiRouter);
 
+// ─── Global Error Handler ───────────────────────────────────────────────────────
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error(`[ERROR] ${req.method} ${req.originalUrl}`, err.stack || err.message);
+  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+});
+
 // ─── Socket.io ───────────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
   console.log('[Socket] Client connected:', socket.id);
@@ -69,3 +78,12 @@ initCronJobs();
 // ─── Start ───────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`🚀 ClientFlow AI running on port ${PORT}`));
+
+// ─── Graceful Shutdown ───────────────────────────────────────────────────────────
+process.on('SIGTERM', () => {
+  console.log('[Server] SIGTERM received, shutting down gracefully');
+  server.close(() => {
+    console.log('[Server] HTTP server closed');
+    process.exit(0);
+  });
+});

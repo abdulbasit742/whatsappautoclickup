@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard, Users, MessageSquare, CreditCard, BarChart2,
-  Star, Megaphone, Package, FileText, Calendar, Link, Settings, LogOut, Zap, Clock
+  Star, Megaphone, Package, FileText, Calendar, Link, Settings, LogOut, Zap, Clock, Sparkles
 } from 'lucide-react';
 
 const links = [
@@ -18,6 +18,7 @@ const links = [
   { to: '/templates', icon: FileText, label: 'Templates' },
   { to: '/appointments', icon: Calendar, label: 'Appointments' },
   { to: '/referrals', icon: Link, label: 'Referrals' },
+  { to: '/ai', icon: Sparkles, label: 'AI Center' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 

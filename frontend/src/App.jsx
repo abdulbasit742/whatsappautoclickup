@@ -17,6 +17,7 @@ import Templates from './pages/Templates';
 import Appointments from './pages/Appointments';
 import Referrals from './pages/Referrals';
 import Settings from './pages/Settings';
+import AICenter from './pages/AICenter';
 
 function Layout({ children }) {
   return (
@@ -59,6 +60,7 @@ export default function App() {
           <Route path="/appointments" element={<Protected><Appointments /></Protected>} />
           <Route path="/referrals"   element={<Protected><Referrals /></Protected>} />
           <Route path="/settings"    element={<Protected><Settings /></Protected>} />
+          <Route path="/ai"          element={<Protected><AICenter /></Protected>} />
         </Routes>
       </BrowserRouter>
       </ToastProvider>

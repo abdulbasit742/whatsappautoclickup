@@ -29,7 +29,8 @@ export default function Dashboard() {
     refresh().finally(() => setLoading(false));
     api.get('/ai/health').then(r => setAiHealth(r.data)).catch(() => {});
 
-    const socket = io('', { path: '/socket.io' });
+    const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || '';
+    const socket = io(SOCKET_URL, { path: '/socket.io' });
     socket.on('new_alert', () => refresh());
     return () => socket.disconnect();
   }, []);
