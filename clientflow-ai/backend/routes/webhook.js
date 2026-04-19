@@ -184,7 +184,7 @@ async function handleAIResponse(client, to, userMessage, io) {
     `SELECT direction, content FROM messages WHERE client_id=$1 ORDER BY created_at DESC LIMIT 10`,
     [client.id]
   );
-  const history = histRes.rows.reverse().map(m => ({
+  const history = [...histRes.rows].reverse().map(m => ({
     role: m.direction === 'inbound' ? 'user' : 'assistant',
     content: m.content,
   }));

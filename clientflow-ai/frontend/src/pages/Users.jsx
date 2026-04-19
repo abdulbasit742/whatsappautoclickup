@@ -4,6 +4,12 @@ import { Users as UsersIcon, Plus, Edit2, Trash2, Key, Shield, UserCheck } from 
 
 const ROLE_COLORS = { admin: 'text-red-400 bg-red-400/10', agent: 'text-emerald-400 bg-emerald-400/10', viewer: 'text-blue-400 bg-blue-400/10' };
 
+const ICON_COLORS = {
+  admin: 'text-red-400',
+  agent: 'text-emerald-400',
+  viewer: 'text-blue-400',
+};
+
 export default function Users() {
   const [users, setUsers] = useState([]);
   const [form, setForm] = useState({ email: '', name: '', password: '', role: 'agent' });
@@ -185,12 +191,12 @@ export default function Users() {
       {/* Role permissions info */}
       <div className="mt-6 grid grid-cols-3 gap-4">
         {[
-          { role: 'Admin', icon: Shield, color: 'red', perms: ['Full access', 'User management', 'Settings', 'Billing', 'Delete records'] },
-          { role: 'Agent', icon: UserCheck, color: 'emerald', perms: ['Clients & Leads', 'Inbox & Messages', 'Follow-ups', 'Campaigns', 'Analytics (view)'] },
-          { role: 'Viewer', icon: UsersIcon, color: 'blue', perms: ['Read-only access', 'Dashboard', 'Analytics', 'Reports', 'No edits'] },
-        ].map(({ role, icon: Icon, color, perms }) => (
+          { role: 'Admin', icon: Shield, colorKey: 'admin', perms: ['Full access', 'User management', 'Settings', 'Billing', 'Delete records'] },
+          { role: 'Agent', icon: UserCheck, colorKey: 'agent', perms: ['Clients & Leads', 'Inbox & Messages', 'Follow-ups', 'Campaigns', 'Analytics (view)'] },
+          { role: 'Viewer', icon: UsersIcon, colorKey: 'viewer', perms: ['Read-only access', 'Dashboard', 'Analytics', 'Reports', 'No edits'] },
+        ].map(({ role, icon: Icon, colorKey, perms }) => (
           <div key={role} className="bg-[#1a1a1a] rounded-xl p-4 border border-[#2a2a2a]">
-            <div className={`flex items-center gap-2 mb-3 text-${color}-400`}>
+            <div className={`flex items-center gap-2 mb-3 ${ICON_COLORS[colorKey]}`}>
               <Icon size={16} />
               <span className="font-semibold text-sm">{role}</span>
             </div>

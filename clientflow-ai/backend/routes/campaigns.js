@@ -40,8 +40,16 @@ router.delete('/lists/:id', async (req, res) => {
 router.post('/lists/:id/members', async (req, res) => {
   try {
     const { client_ids } = req.body;
-    const values = client_ids.map((cid) => `('${req.params.id}','${cid}')`).join(',');
-    await db.query(`INSERT INTO contact_list_members (list_id, client_id) VALUES ${values} ON CONFLICT DO NOTHING`);
+    if (!Array.isArray(client_ids) || client_ids.length === 0) {
+      return res.status(400).json({ error: 'client_ids must be a non-empty array' });
+    }
+    // Use parameterized query to prevent SQL injection
+    for (const cid of client_ids) {
+      await db.query(
+        `INSERT INTO contact_list_members (list_id, client_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+        [req.params.id, cid]
+      );
+    }
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
