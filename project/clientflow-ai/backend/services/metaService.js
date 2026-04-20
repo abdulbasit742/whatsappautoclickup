@@ -18,15 +18,32 @@ const REQUIRED_SCOPES = [
   'email',
 ];
 
+const ALLOWED_GRAPH_HOSTS = ['graph.facebook.com', 'www.facebook.com'];
+
 // ─── Rate-Limit-Aware Request ────────────────────────────────────────────────────
 async function makeGraphRequest({ method = 'GET', path, params = {}, data = {}, token, retries = 3 }) {
-  const url = path.startsWith('http') ? path : `${GRAPH_BASE}${path}`;
+  // Build the full URL — only allow requests to Meta's Graph API (SSRF protection)
+  let url;
+  if (path.startsWith('http')) {
+    const parsed = new URL(path);
+    if (!ALLOWED_GRAPH_HOSTS.includes(parsed.hostname)) {
+      return { data: null, error: { type: 'invalid_host', message: `Disallowed host: ${parsed.hostname}` } };
+    }
+    url = path;
+  } else {
+    url = `${GRAPH_BASE}${path}`;
+  }
+
+  // Build params — keep access_token out of URLs for GET by injecting directly into params
+  const requestParams = { ...params };
+  if (token) requestParams.access_token = token;
+
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const config = {
         method,
         url,
-        params: { ...params, access_token: token },
+        params: requestParams,
         data: method !== 'GET' ? data : undefined,
         timeout: 15000,
       };

@@ -14,8 +14,15 @@ router.get('/', (req, res) => {
   const token     = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
   if (mode === 'subscribe' && token === process.env.META_WEBHOOK_VERIFY_TOKEN) {
+    // Validate challenge is safe alphanumeric before echoing (prevents XSS)
+    const safeChallenge = /^[a-zA-Z0-9_\-]+$/.test(challenge || '') ? challenge : '';
+    if (!safeChallenge) {
+      console.warn('[SocialWebhook] Invalid challenge format');
+      return res.sendStatus(400);
+    }
     console.log('[SocialWebhook] Webhook verified');
-    return res.status(200).send(challenge);
+    res.setHeader('Content-Type', 'text/plain');
+    return res.status(200).send(safeChallenge);
   }
   console.warn('[SocialWebhook] Verification failed');
   res.sendStatus(403);

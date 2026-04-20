@@ -5,7 +5,10 @@
 const db = require('../db');
 const { debugToken, refreshLongLivedToken } = require('./metaService');
 
-// ─── Save or update a social account token ───────────────────────────────────────
+// Token expiry fallback: 60 days in milliseconds
+const DEFAULT_TOKEN_EXPIRY_MS = 60 * 24 * 60 * 60 * 1000;
+
+
 async function saveToken({ platform, accountId, accountName, username, accessToken, tokenType = 'page',
   expiresAt = null, scopes = null, profilePictureUrl = null, fbPageId = null }) {
   const result = await db.query(
@@ -96,7 +99,7 @@ async function refreshToken(accountDbId) {
     const result = await refreshLongLivedToken(account.access_token);
     const expiresAt = result.expires_in
       ? new Date(Date.now() + result.expires_in * 1000)
-      : new Date(Date.now() + 60 * 24 * 60 * 60 * 1000); // default 60 days
+      : new Date(Date.now() + DEFAULT_TOKEN_EXPIRY_MS);
 
     await db.query(
       `UPDATE social_accounts
