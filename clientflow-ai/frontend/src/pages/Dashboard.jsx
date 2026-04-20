@@ -3,6 +3,7 @@ import { io } from 'socket.io-client';
 import { Users, TrendingUp, Star, AlertTriangle, Send, X, Activity } from 'lucide-react';
 import api from '../utils/api';
 import StatCard from '../components/StatCard';
+import OnboardingChecklist from '../components/OnboardingChecklist';
 
 const ALERT_COLORS = {
   unresolved_query: 'bg-yellow-500/20 text-yellow-400',
@@ -58,6 +59,11 @@ export default function Dashboard() {
   return (
     <div>
       <h2 className="text-xl font-bold mb-6 text-white">Dashboard</h2>
+
+      {/* Onboarding checklist */}
+      <div className="mb-6">
+        <OnboardingChecklist />
+      </div>
 
       {/* Stat Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
