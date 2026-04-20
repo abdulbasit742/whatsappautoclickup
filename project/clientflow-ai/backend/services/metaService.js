@@ -21,20 +21,15 @@ const REQUIRED_SCOPES = [
 const ALLOWED_GRAPH_HOSTS = ['graph.facebook.com', 'www.facebook.com'];
 
 // ─── Rate-Limit-Aware Request ────────────────────────────────────────────────────
+// path must always be a relative path (starts with '/') — absolute URLs are not accepted
 async function makeGraphRequest({ method = 'GET', path, params = {}, data = {}, token, retries = 3 }) {
-  // Build the full URL — only allow requests to Meta's Graph API (SSRF protection)
-  let url;
-  if (path.startsWith('http')) {
-    const parsed = new URL(path);
-    if (!ALLOWED_GRAPH_HOSTS.includes(parsed.hostname)) {
-      return { data: null, error: { type: 'invalid_host', message: `Disallowed host: ${parsed.hostname}` } };
-    }
-    url = path;
-  } else {
-    url = `${GRAPH_BASE}${path}`;
+  // Always build URL relative to GRAPH_BASE — this enforces graph.facebook.com as the only target
+  if (!path || !path.startsWith('/')) {
+    return { data: null, error: { type: 'invalid_path', message: `Path must be a relative path starting with /: ${path}` } };
   }
+  const url = `${GRAPH_BASE}${path}`;
 
-  // Build params — keep access_token out of URLs for GET by injecting directly into params
+  // Build params — inject access_token via params (not URL interpolation)
   const requestParams = { ...params };
   if (token) requestParams.access_token = token;
 

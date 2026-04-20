@@ -10,7 +10,11 @@ router.get('/', (req, res) => {
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
   if (mode === 'subscribe' && token === process.env.WHATSAPP_VERIFY_TOKEN) {
-    return res.status(200).send(challenge);
+    // Validate challenge is safe before echoing (prevents reflected XSS)
+    const safeChallenge = /^[a-zA-Z0-9_\-]+$/.test(challenge || '') ? challenge : '';
+    if (!safeChallenge) return res.sendStatus(400);
+    res.setHeader('Content-Type', 'text/plain');
+    return res.status(200).send(safeChallenge);
   }
   res.sendStatus(403);
 });
