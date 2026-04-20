@@ -49,5 +49,5 @@ export function ToastProvider({ children }) {
 export function useToast() {
   const ctx = useContext(ToastContext);
   if (!ctx) throw new Error('useToast must be inside ToastProvider');
-  return ctx;
+  return { showToast: ctx };
 }

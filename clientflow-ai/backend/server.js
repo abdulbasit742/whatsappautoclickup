@@ -4,6 +4,7 @@ const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
 const multer = require('multer');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const server = http.createServer(app);
@@ -13,10 +14,36 @@ const io = new Server(server, {
 
 app.set('io', io);
 
+// ─── Rate Limiting ────────────────────────────────────────────────────────────
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts, please try again later.' },
+});
+
+const supportLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many support requests, please try again later.' },
+});
+
 // ─── Middleware ──────────────────────────────────────────────────────────────────
 app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
+app.use('/api', apiLimiter);
 
 const upload = multer({ dest: 'uploads/' });
 app.post('/api/upload', upload.single('file'), (req, res) => {
@@ -54,7 +81,7 @@ const livechatRouter        = require('./routes/livechat');
 const healthScoreRouter     = require('./routes/healthScore');
 
 app.use('/webhook',                  webhookRouter);
-app.use('/api/auth',                 authRouter);
+app.use('/api/auth',                 authLimiter, authRouter);
 app.use('/api/clients',              clientRouter);
 app.use('/api/payments',             paymentRouter);
 app.use('/api/services',             serviceRouter);
@@ -78,7 +105,7 @@ app.use('/api/announcements',        announcementsRouter);
 app.use('/api/release-notes',        releaseNotesRouter);
 app.use('/api/help',                 helpCenterRouter);
 app.use('/api/faqs',                 faqsRouter);
-app.use('/api/support',              supportRouter);
+app.use('/api/support',              supportLimiter, supportRouter);
 app.use('/api/livechat',             livechatRouter);
 app.use('/api/health',               healthScoreRouter);
 
