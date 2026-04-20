@@ -4,6 +4,7 @@ const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
 const multer = require('multer');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const server = http.createServer(app);
@@ -12,6 +13,23 @@ const io = new Server(server, {
 });
 
 app.set('io', io);
+
+// ─── Rate Limiting ───────────────────────────────────────────────────────────────
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.path.startsWith('/webhook'),
+});
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use(globalLimiter);
 
 // ─── Middleware ──────────────────────────────────────────────────────────────────
 app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
@@ -41,7 +59,7 @@ const followupRouter    = require('./routes/followups');
 const aiRouter          = require('./routes/ai');
 
 app.use('/webhook',          webhookRouter);
-app.use('/api/auth',         authRouter);
+app.use('/api/auth',         authLimiter, authRouter);
 app.use('/api/clients',      clientRouter);
 app.use('/api/payments',     paymentRouter);
 app.use('/api/services',     serviceRouter);
