@@ -66,6 +66,13 @@ io.on('connection', (socket) => {
 const { initCronJobs } = require('./services/cronService');
 initCronJobs();
 
+// ─── Error Handling Middleware ───────────────────────────────────────────────────
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error('[Error]', err.message);
+  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+});
+
 // ─── Start ───────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`🚀 ClientFlow AI running on port ${PORT}`));
