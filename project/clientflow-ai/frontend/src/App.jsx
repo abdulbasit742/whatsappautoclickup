@@ -17,6 +17,10 @@ import Templates from './pages/Templates';
 import Appointments from './pages/Appointments';
 import Referrals from './pages/Referrals';
 import Settings from './pages/Settings';
+import SocialAccounts from './pages/SocialAccounts';
+import SocialInbox from './pages/SocialInbox';
+import SocialScheduler from './pages/SocialScheduler';
+import SocialAnalytics from './pages/SocialAnalytics';
 
 function Layout({ children }) {
   return (
@@ -59,6 +63,10 @@ export default function App() {
           <Route path="/appointments" element={<Protected><Appointments /></Protected>} />
           <Route path="/referrals"   element={<Protected><Referrals /></Protected>} />
           <Route path="/settings"    element={<Protected><Settings /></Protected>} />
+          <Route path="/social/accounts"  element={<Protected><SocialAccounts /></Protected>} />
+          <Route path="/social/inbox"     element={<Protected><SocialInbox /></Protected>} />
+          <Route path="/social/scheduler" element={<Protected><SocialScheduler /></Protected>} />
+          <Route path="/social/analytics" element={<Protected><SocialAnalytics /></Protected>} />
         </Routes>
       </BrowserRouter>
       </ToastProvider>

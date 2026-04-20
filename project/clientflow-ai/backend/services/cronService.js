@@ -156,12 +156,73 @@ async function sendWeeklySummary() {
   }
 }
 
+// ─── Social Token Refresh (runs every 6 hours) ───────────────────────────────────
+async function runSocialTokenRefresh() {
+  try {
+    const { checkAndRefreshTokens } = require('./tokenService');
+    await checkAndRefreshTokens();
+    console.log('[Cron] Social token refresh complete');
+  } catch (err) {
+    console.error('[Cron] Social token refresh error:', err.message);
+  }
+}
+
+// ─── Social Post Scheduler (runs every 5 min) ────────────────────────────────────
+async function runScheduledSocialPosts() {
+  try {
+    const postsRes = await db.query(
+      `SELECT sp.*, sa.platform, sa.account_id, sa.access_token
+       FROM social_posts sp
+       JOIN social_accounts sa ON sa.id = sp.account_id
+       WHERE sp.status='scheduled' AND sp.scheduled_at <= NOW() AND sa.is_active=true`
+    );
+
+    for (const post of postsRes.rows) {
+      try {
+        const meta = require('./metaService');
+        let platformPostId;
+
+        if (post.platform === 'facebook') {
+          const result = await meta.publishFBPost(post.account_id, post.access_token, post.content, post.media_url);
+          platformPostId = result.id;
+        } else if (post.platform === 'instagram') {
+          if (!post.media_url) {
+            await db.query(
+              `UPDATE social_posts SET status='failed', error_message='Instagram requires media_url' WHERE id=$1`,
+              [post.id]
+            );
+            continue;
+          }
+          const result = await meta.publishIGPost(post.account_id, post.access_token, post.media_url, post.content);
+          platformPostId = result.id;
+        }
+
+        await db.query(
+          `UPDATE social_posts SET status='published', published_at=NOW(), platform_post_id=$1 WHERE id=$2`,
+          [platformPostId, post.id]
+        );
+        console.log(`[Cron] Social post published: ${post.platform}/${post.id}`);
+      } catch (err) {
+        await db.query(
+          `UPDATE social_posts SET status='failed', error_message=$1 WHERE id=$2`,
+          [err.message, post.id]
+        );
+        console.error(`[Cron] Social post failed ${post.id}: ${err.message}`);
+      }
+    }
+  } catch (err) {
+    console.error('[Cron] Social post scheduler error:', err.message);
+  }
+}
+
 function initCronJobs() {
   cron.schedule('0 * * * *',       runFollowUps);              // every hour
   cron.schedule('*/15 * * * *',    runAppointmentReminders);   // every 15 min
   cron.schedule('*/15 * * * *',    runScheduledBroadcasts);    // every 15 min
   cron.schedule('0 */6 * * *',     scheduleInactiveAlerts);    // every 6 hours
   cron.schedule('0 9 * * 1',       sendWeeklySummary);         // every Monday 9am
+  cron.schedule('0 */6 * * *',     runSocialTokenRefresh);     // every 6 hours
+  cron.schedule('*/5 * * * *',     runScheduledSocialPosts);   // every 5 min
   console.log('[Cron] All jobs initialized');
 }
 

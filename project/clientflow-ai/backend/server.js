@@ -39,8 +39,11 @@ const analyticsRouter   = require('./routes/analytics');
 const settingsRouter    = require('./routes/settings');
 const followupRouter    = require('./routes/followups');
 const aiRouter          = require('./routes/ai');
+const socialRouter      = require('./routes/social');
+const socialWebhookRouter = require('./routes/socialWebhook');
 
 app.use('/webhook',          webhookRouter);
+app.use('/webhook/meta',     socialWebhookRouter);
 app.use('/api/auth',         authRouter);
 app.use('/api/clients',      clientRouter);
 app.use('/api/payments',     paymentRouter);
@@ -55,6 +58,7 @@ app.use('/api/analytics',    analyticsRouter);
 app.use('/api/settings',     settingsRouter);
 app.use('/api/followups',    followupRouter);
 app.use('/api/ai',           aiRouter);
+app.use('/api/social',       socialRouter);
 
 // ─── Socket.io ───────────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {

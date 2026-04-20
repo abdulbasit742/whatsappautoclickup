@@ -2,7 +2,8 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard, Users, MessageSquare, CreditCard, BarChart2,
-  Star, Megaphone, Package, FileText, Calendar, Link, Settings, LogOut, Zap, Clock
+  Star, Megaphone, Package, FileText, Calendar, Link, Settings, LogOut, Zap, Clock,
+  Facebook, Instagram, Globe, CalendarDays, BarChart
 } from 'lucide-react';
 
 const links = [
@@ -19,6 +20,13 @@ const links = [
   { to: '/appointments', icon: Calendar, label: 'Appointments' },
   { to: '/referrals', icon: Link, label: 'Referrals' },
   { to: '/settings', icon: Settings, label: 'Settings' },
+];
+
+const socialLinks = [
+  { to: '/social/accounts',  icon: Globe,        label: 'Social Accounts' },
+  { to: '/social/inbox',     icon: Facebook,     label: 'Social Inbox' },
+  { to: '/social/scheduler', icon: CalendarDays, label: 'Scheduler' },
+  { to: '/social/analytics', icon: BarChart,     label: 'Social Stats' },
 ];
 
 export default function Sidebar() {
@@ -39,6 +47,25 @@ export default function Sidebar() {
               `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
                 isActive
                   ? 'bg-emerald-500/10 text-emerald-400 border-r-2 border-emerald-400'
+                  : 'text-gray-400 hover:text-white hover:bg-white/5'
+              }`
+            }
+          >
+            <Icon size={16} />
+            {label}
+          </NavLink>
+        ))}
+        <div className="px-4 pt-3 pb-1">
+          <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest">Social</p>
+        </div>
+        {socialLinks.map(({ to, icon: Icon, label }) => (
+          <NavLink
+            key={to}
+            to={to}
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
+                isActive
+                  ? 'bg-blue-500/10 text-blue-400 border-r-2 border-blue-400'
                   : 'text-gray-400 hover:text-white hover:bg-white/5'
               }`
             }
