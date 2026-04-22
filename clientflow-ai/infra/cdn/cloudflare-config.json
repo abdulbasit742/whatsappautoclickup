@@ -1,0 +1,33 @@
+{
+  "name": "clientflow-ai-worker",
+  "main": "failover-worker.js",
+  "compatibility_date": "2024-01-01",
+  "account_id": "${CLOUDFLARE_ACCOUNT_ID}",
+  "routes": [
+    {
+      "pattern": "cdn.clientflow-ai.example.com/*",
+      "zone_name": "clientflow-ai.example.com"
+    }
+  ],
+  "vars": {
+    "PRIMARY_ORIGIN":   "https://aws.clientflow-ai.example.com",
+    "SECONDARY_ORIGIN": "https://gcp.clientflow-ai.example.com",
+    "TERTIARY_ORIGIN":  "https://azure.clientflow-ai.example.com",
+    "HEALTH_PATH":      "/api/monitoring/health",
+    "CACHE_TTL":        "86400",
+    "BYPASS_CACHE_PATHS": "/api/,/webhook"
+  },
+  "kv_namespaces": [
+    {
+      "binding":     "CDN_HEALTH_KV",
+      "id":          "${CDN_HEALTH_KV_ID}",
+      "preview_id":  "${CDN_HEALTH_KV_PREVIEW_ID}"
+    }
+  ],
+  "placement": {
+    "mode": "smart"
+  },
+  "limits": {
+    "cpu_ms": 50
+  }
+}

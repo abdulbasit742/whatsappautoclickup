@@ -1,0 +1,141 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: ClientFlow AI — Serverless Functions (AWS SAM)
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 256
+    Runtime: nodejs18.x
+    Environment:
+      Variables:
+        BACKEND_URL: !Ref BackendUrl
+        INTERNAL_SECRET: !Ref InternalSecret
+
+Parameters:
+  BackendUrl:
+    Type: String
+    Description: URL of the ClientFlow AI backend API
+  InternalSecret:
+    Type: String
+    NoEcho: true
+    Description: Internal secret for backend-to-backend auth
+  WhatsAppVerifyToken:
+    Type: String
+    NoEcho: true
+    Description: WhatsApp webhook verify token
+  Stage:
+    Type: String
+    Default: production
+    AllowedValues: [production, staging, development]
+
+Resources:
+
+  # ─── MESSAGE HANDLER ─────────────────────────────────────────────────────────
+  MessageHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "clientflow-ai-message-handler-${Stage}"
+      CodeUri: aws-lambda/
+      Handler: messageHandler.handler
+      Description: Handles incoming WhatsApp webhook events
+      Environment:
+        Variables:
+          WHATSAPP_VERIFY_TOKEN: !Ref WhatsAppVerifyToken
+      Events:
+        WebhookPost:
+          Type: Api
+          Properties:
+            Path: /webhook
+            Method: POST
+            RestApiId: !Ref WebhookApi
+        WebhookGet:
+          Type: Api
+          Properties:
+            Path: /webhook
+            Method: GET
+            RestApiId: !Ref WebhookApi
+      Policies:
+        - CloudWatchLogsFullAccess
+
+  # ─── SCHEDULER ───────────────────────────────────────────────────────────────
+  FollowupSchedulerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "clientflow-ai-scheduler-followup-${Stage}"
+      CodeUri: aws-lambda/
+      Handler: schedulerFunction.handler
+      Description: Runs scheduled follow-up checks
+      Environment:
+        Variables:
+          JOB_NAME: followup-check
+      Events:
+        FollowupSchedule:
+          Type: Schedule
+          Properties:
+            Schedule: rate(15 minutes)
+            Input: '{"jobName":"followup-check"}'
+            Name: FollowupCheck
+            Description: Check and send due follow-ups
+            Enabled: true
+
+  BroadcastSchedulerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "clientflow-ai-scheduler-broadcast-${Stage}"
+      CodeUri: aws-lambda/
+      Handler: schedulerFunction.handler
+      Description: Processes queued broadcasts
+      Events:
+        BroadcastSchedule:
+          Type: Schedule
+          Properties:
+            Schedule: rate(5 minutes)
+            Input: '{"jobName":"broadcast-queue"}'
+            Name: BroadcastProcessor
+            Enabled: true
+
+  SegmentRefreshFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "clientflow-ai-scheduler-segments-${Stage}"
+      CodeUri: aws-lambda/
+      Handler: schedulerFunction.handler
+      Description: Refreshes client segments daily
+      Events:
+        SegmentSchedule:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 2 * * ? *)
+            Input: '{"jobName":"segment-refresh"}'
+            Name: SegmentRefresh
+            Enabled: true
+
+  # ─── API GATEWAY ─────────────────────────────────────────────────────────────
+  WebhookApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "clientflow-ai-webhook-api-${Stage}"
+      StageName: !Ref Stage
+      Cors:
+        AllowMethods: "'POST,GET,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization'"
+        AllowOrigin: "'*'"
+      AccessLogSetting:
+        DestinationArn: !GetAtt WebhookApiLogGroup.Arn
+
+  WebhookApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/apigateway/clientflow-ai-webhook-${Stage}"
+      RetentionInDays: 30
+
+Outputs:
+  WebhookApiUrl:
+    Description: WhatsApp webhook URL
+    Value: !Sub "https://${WebhookApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/webhook"
+  MessageHandlerArn:
+    Value: !GetAtt MessageHandlerFunction.Arn
+  FollowupSchedulerArn:
+    Value: !GetAtt FollowupSchedulerFunction.Arn

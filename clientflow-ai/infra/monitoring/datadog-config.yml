@@ -1,0 +1,116 @@
+api_key: "${DD_API_KEY}"
+site: datadoghq.com
+env: production
+service: clientflow-ai
+version: "1.0"
+
+# ─── APM ────────────────────────────────────────────────────────────────────────
+apm_config:
+  enabled: true
+  apm_dd_url: https://trace.agent.datadoghq.com
+  analyzed_spans:
+    clientflow-ai|express.request: 1.0
+    clientflow-ai|pg.query: 1.0
+
+# ─── INFRASTRUCTURE METRICS ─────────────────────────────────────────────────────
+infrastructure:
+  enabled: true
+
+# ─── LOGS ───────────────────────────────────────────────────────────────────────
+logs_enabled: true
+logs_config:
+  container_collect_all: true
+  processing_rules:
+    - type: multi_line
+      name: log_start_with_date
+      pattern: \d{4}-(0?[1-9]|1[012])-(0?[1-9]|[12][0-9]|3[01])
+
+# ─── NETWORK PERFORMANCE ────────────────────────────────────────────────────────
+network_config:
+  enabled: true
+
+# ─── PROCESS MONITORING ─────────────────────────────────────────────────────────
+process_config:
+  enabled: true
+  min_collection_interval: 15
+
+# ─── MONITORS ───────────────────────────────────────────────────────────────────
+monitors:
+  - name: "ClientFlow AI - High Error Rate"
+    type: metric alert
+    query: "avg(last_5m):sum:nginx.net.request_per_s{service:clientflow-ai} / sum:http.server.requests{service:clientflow-ai,status_class:5xx} > 0.05"
+    message: |
+      Error rate exceeds 5% on ClientFlow AI.
+      @pagerduty-clientflow-ai @slack-clientflow-alerts
+    tags:
+      - "service:clientflow-ai"
+      - "env:production"
+    thresholds:
+      critical: 0.05
+      warning:  0.02
+    priority: 1
+
+  - name: "ClientFlow AI - High API Latency"
+    type: metric alert
+    query: "avg(last_5m):avg:trace.express.request.duration{service:clientflow-ai} > 2000"
+    message: |
+      API p99 latency exceeds 2 seconds.
+      @pagerduty-clientflow-ai
+    thresholds:
+      critical: 2000
+      warning:  1000
+    priority: 1
+
+  - name: "ClientFlow AI - DB Connection Pool Exhaustion"
+    type: metric alert
+    query: "avg(last_5m):avg:postgresql.connections{dbname:clientflow} / avg:postgresql.max_connections{dbname:clientflow} > 0.8"
+    message: "Database connection pool 80% utilized. @pagerduty-clientflow-ai"
+    thresholds:
+      critical: 0.8
+      warning:  0.6
+    priority: 2
+
+  - name: "ClientFlow AI - Service Down"
+    type: service check
+    query: "\"http.can_connect\".over(\"url:https://api.clientflow-ai.example.com/api/monitoring/health\").last(3).count_by_status()"
+    message: "ClientFlow AI API is not responding! @pagerduty-clientflow-ai"
+    thresholds:
+      critical: 3
+      warning:  1
+
+# ─── DASHBOARDS ─────────────────────────────────────────────────────────────────
+dashboards:
+  - title: "ClientFlow AI - Overview"
+    description: "Platform health and performance metrics"
+    widgets:
+      - title: "API Requests/sec"
+        type: timeseries
+        query: "avg:trace.express.request.hits{service:clientflow-ai}.as_rate()"
+      - title: "p99 Latency"
+        type: timeseries
+        query: "p99:trace.express.request.duration{service:clientflow-ai}"
+      - title: "Error Rate"
+        type: toplist
+        query: "sum:trace.express.request.errors{service:clientflow-ai} by {resource_name}"
+      - title: "DB Query Performance"
+        type: timeseries
+        query: "avg:trace.pg.query.duration{service:clientflow-ai}"
+      - title: "Active Users (Last 15m)"
+        type: query_value
+        query: "count_nonzero(last_15m):trace.express.request.hits{service:clientflow-ai} by {http.useragent}"
+
+# ─── LOG PIPELINES ──────────────────────────────────────────────────────────────
+log_pipelines:
+  - name: "ClientFlow AI Access Logs"
+    filter: "service:clientflow-ai"
+    processors:
+      - type: grok-parser
+        name: "Parse Express logs"
+        grok:
+          support_rules: ""
+          match_rules: |
+            express_rule \[%{word:level}\] %{notSpace:method} %{notSpace:path} %{integer:status} %{integer:latency}ms
+      - type: attribute-remapper
+        name: "Map status to http.status_code"
+        sources: ["status"]
+        target: "http.status_code"

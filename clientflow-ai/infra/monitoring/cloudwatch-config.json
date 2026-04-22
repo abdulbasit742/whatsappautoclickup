@@ -1,0 +1,110 @@
+{
+  "alarms": [
+    {
+      "AlarmName": "ClientFlowAI-HighCPU",
+      "AlarmDescription": "CPU utilization exceeds 80% for 5 consecutive minutes",
+      "MetricName": "CPUUtilization",
+      "Namespace": "AWS/ECS",
+      "Statistic": "Average",
+      "Period": 300,
+      "EvaluationPeriods": 2,
+      "Threshold": 80,
+      "ComparisonOperator": "GreaterThanThreshold",
+      "AlarmActions": ["arn:aws:sns:us-east-1:ACCOUNT_ID:clientflow-ai-alerts"],
+      "OKActions":    ["arn:aws:sns:us-east-1:ACCOUNT_ID:clientflow-ai-alerts"],
+      "Dimensions": [
+        { "Name": "ClusterName", "Value": "clientflow-ai-cluster" },
+        { "Name": "ServiceName", "Value": "clientflow-ai-service" }
+      ]
+    },
+    {
+      "AlarmName": "ClientFlowAI-HighMemory",
+      "AlarmDescription": "Memory utilization exceeds 85%",
+      "MetricName": "MemoryUtilization",
+      "Namespace": "AWS/ECS",
+      "Statistic": "Average",
+      "Period": 300,
+      "EvaluationPeriods": 2,
+      "Threshold": 85,
+      "ComparisonOperator": "GreaterThanThreshold",
+      "AlarmActions": ["arn:aws:sns:us-east-1:ACCOUNT_ID:clientflow-ai-alerts"]
+    },
+    {
+      "AlarmName": "ClientFlowAI-HighDBConnections",
+      "AlarmDescription": "Database connections exceed 100",
+      "MetricName": "DatabaseConnections",
+      "Namespace": "AWS/RDS",
+      "Statistic": "Average",
+      "Period": 60,
+      "EvaluationPeriods": 3,
+      "Threshold": 100,
+      "ComparisonOperator": "GreaterThanThreshold",
+      "AlarmActions": ["arn:aws:sns:us-east-1:ACCOUNT_ID:clientflow-ai-alerts"],
+      "Dimensions": [
+        { "Name": "DBInstanceIdentifier", "Value": "clientflow-ai-db" }
+      ]
+    },
+    {
+      "AlarmName": "ClientFlowAI-HighAPILatency",
+      "AlarmDescription": "ALB target response time exceeds 2 seconds",
+      "MetricName": "TargetResponseTime",
+      "Namespace": "AWS/ApplicationELB",
+      "Statistic": "Average",
+      "Period": 60,
+      "EvaluationPeriods": 3,
+      "Threshold": 2,
+      "ComparisonOperator": "GreaterThanThreshold",
+      "AlarmActions": ["arn:aws:sns:us-east-1:ACCOUNT_ID:clientflow-ai-alerts"],
+      "Dimensions": [
+        { "Name": "LoadBalancer", "Value": "app/clientflow-ai-alb/XXXX" }
+      ]
+    },
+    {
+      "AlarmName": "ClientFlowAI-HighErrorRate",
+      "AlarmDescription": "5XX error rate exceeds 5%",
+      "MetricName": "HTTPCode_Target_5XX_Count",
+      "Namespace": "AWS/ApplicationELB",
+      "Statistic": "Sum",
+      "Period": 60,
+      "EvaluationPeriods": 2,
+      "Threshold": 10,
+      "ComparisonOperator": "GreaterThanThreshold",
+      "AlarmActions": ["arn:aws:sns:us-east-1:ACCOUNT_ID:clientflow-ai-alerts"],
+      "Dimensions": [
+        { "Name": "LoadBalancer", "Value": "app/clientflow-ai-alb/XXXX" }
+      ]
+    },
+    {
+      "AlarmName": "ClientFlowAI-RDSFreeStorageLow",
+      "AlarmDescription": "RDS free storage below 5GB",
+      "MetricName": "FreeStorageSpace",
+      "Namespace": "AWS/RDS",
+      "Statistic": "Average",
+      "Period": 300,
+      "EvaluationPeriods": 1,
+      "Threshold": 5368709120,
+      "ComparisonOperator": "LessThanThreshold",
+      "AlarmActions": ["arn:aws:sns:us-east-1:ACCOUNT_ID:clientflow-ai-alerts"],
+      "Dimensions": [
+        { "Name": "DBInstanceIdentifier", "Value": "clientflow-ai-db" }
+      ]
+    }
+  ],
+  "dashboards": [
+    {
+      "DashboardName": "ClientFlowAI-Overview",
+      "DashboardBody": {
+        "widgets": [
+          { "type": "metric", "properties": { "title": "CPU Utilization", "metrics": [["AWS/ECS","CPUUtilization"]] } },
+          { "type": "metric", "properties": { "title": "Memory Utilization", "metrics": [["AWS/ECS","MemoryUtilization"]] } },
+          { "type": "metric", "properties": { "title": "API Latency", "metrics": [["AWS/ApplicationELB","TargetResponseTime"]] } },
+          { "type": "metric", "properties": { "title": "Error Rate", "metrics": [["AWS/ApplicationELB","HTTPCode_Target_5XX_Count"]] } }
+        ]
+      }
+    }
+  ],
+  "logGroups": [
+    { "logGroupName": "/ecs/clientflow-ai", "retentionInDays": 30 },
+    { "logGroupName": "/aws/apigateway/clientflow-ai-webhook-production", "retentionInDays": 14 }
+  ]
+}

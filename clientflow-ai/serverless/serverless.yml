@@ -1,0 +1,115 @@
+service: clientflow-ai-serverless
+
+frameworkVersion: '3'
+
+plugins:
+  - serverless-offline
+  - serverless-dotenv-plugin
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  stage: ${opt:stage, 'production'}
+  region: ${opt:region, 'us-east-1'}
+  memorySize: 256
+  timeout: 30
+  logRetentionInDays: 30
+  environment:
+    BACKEND_URL: ${env:BACKEND_URL}
+    INTERNAL_SECRET: ${env:INTERNAL_SECRET}
+    WHATSAPP_VERIFY_TOKEN: ${env:WHATSAPP_VERIFY_TOKEN}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: arn:aws:logs:*:*:*
+
+functions:
+  # ─── WHATSAPP MESSAGE HANDLER ───────────────────────────────────────────────
+  messageHandler:
+    handler: aws-lambda/messageHandler.handler
+    description: Handles incoming WhatsApp webhook events
+    events:
+      - http:
+          path: /webhook
+          method: POST
+          cors: true
+      - http:
+          path: /webhook
+          method: GET
+          cors: true
+
+  # ─── SCHEDULERS ─────────────────────────────────────────────────────────────
+  followupScheduler:
+    handler: aws-lambda/schedulerFunction.handler
+    description: Runs scheduled follow-up checks every 15 minutes
+    events:
+      - schedule:
+          rate: rate(15 minutes)
+          enabled: true
+          input:
+            jobName: followup-check
+
+  broadcastProcessor:
+    handler: aws-lambda/schedulerFunction.handler
+    description: Processes broadcast queue every 5 minutes
+    events:
+      - schedule:
+          rate: rate(5 minutes)
+          enabled: true
+          input:
+            jobName: broadcast-queue
+
+  segmentRefresh:
+    handler: aws-lambda/schedulerFunction.handler
+    description: Refreshes client segments nightly
+    events:
+      - schedule:
+          rate: cron(0 2 * * ? *)
+          enabled: true
+          input:
+            jobName: segment-refresh
+
+  winbackCheck:
+    handler: aws-lambda/schedulerFunction.handler
+    description: Checks for churned clients hourly
+    events:
+      - schedule:
+          rate: rate(1 hour)
+          enabled: true
+          input:
+            jobName: winback-check
+
+  engagementScan:
+    handler: aws-lambda/schedulerFunction.handler
+    description: Scans for engagement triggers every 30 minutes
+    events:
+      - schedule:
+          rate: rate(30 minutes)
+          enabled: true
+          input:
+            jobName: engagement-scan
+
+# ─── GCP FUNCTIONS (via serverless-google-cloudfunctions) ────────────────────
+# Uncomment and configure to deploy to GCP
+# provider:
+#   name: google
+#   runtime: nodejs18
+#   project: ${env:GCP_PROJECT_ID}
+#   region: us-central1
+#   credentials: ${env:GOOGLE_APPLICATION_CREDENTIALS}
+# functions:
+#   messageHandler:
+#     handler: whatsappMessageHandler
+#     events:
+#       - http: path
+
+custom:
+  serverless-offline:
+    httpPort: 3001
+    lambdaPort: 3002
+    noPrependStageInUrl: true
