@@ -1,0 +1,11 @@
+node_modules/
+.env
+dist/
+build/
+.DS_Store
+*.log
+uploads/
+extracted/
+clientflow-ai-v3.zip
+frontend/.env
+backend/.env
