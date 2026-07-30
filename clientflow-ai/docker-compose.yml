@@ -1,0 +1,76 @@
+version: '3.9'
+
+services:
+  # ─── PostgreSQL Database ───────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: clientflow_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-clientflow}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-clientflow_secret}
+      POSTGRES_DB: ${DB_NAME:-clientflow}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-clientflow} -d ${DB_NAME:-clientflow}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Backend API ───────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: clientflow_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-clientflow}:${DB_PASSWORD:-clientflow_secret}@postgres:5432/${DB_NAME:-clientflow}
+      PORT: 5000
+      NODE_ENV: ${NODE_ENV:-production}
+      JWT_SECRET: ${JWT_SECRET}
+      OWNER_EMAIL: ${OWNER_EMAIL}
+      OWNER_PASSWORD: ${OWNER_PASSWORD}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      WHATSAPP_TOKEN: ${WHATSAPP_TOKEN}
+      WHATSAPP_PHONE_ID: ${WHATSAPP_PHONE_ID}
+      WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN}
+      WHATSAPP_BUSINESS_ACCOUNT_ID: ${WHATSAPP_BUSINESS_ACCOUNT_ID}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+    volumes:
+      - uploads_data:/app/uploads
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5000/api/ai/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # ─── Frontend (React + Nginx) ─────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: clientflow_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+
+volumes:
+  postgres_data:
+  uploads_data:
